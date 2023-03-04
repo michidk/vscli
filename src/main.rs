@@ -2,19 +2,16 @@ mod launch;
 mod opts;
 mod workspace;
 
-use color_eyre::eyre::{eyre, Result};
-use log::{debug, error, info};
+use color_eyre::eyre::Result;
+use log::debug;
+use std::io::Write;
 use structopt::StructOpt;
 
-use crate::{
-    launch::LaunchConfig,
-    opts::{LaunchBehaviour, Opts},
-    workspace::Workspace,
-};
+use crate::{launch::LaunchConfig, opts::Opts, workspace::Workspace};
 
 /// Entry point for `vscli`.
 fn main() -> Result<()> {
-    let _ = color_eyre::install()?;
+    color_eyre::install()?;
 
     let opts = Opts::from_args();
 

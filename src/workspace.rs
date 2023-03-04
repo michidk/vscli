@@ -1,4 +1,4 @@
-use color_eyre::eyre::{self, eyre, Result, WrapErr};
+use color_eyre::eyre::{eyre, Result, WrapErr};
 use log::debug;
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
@@ -27,10 +27,10 @@ impl<'a> Workspace<'a> {
         self.path.join(".devcontainer").exists()
     }
 
-    pub fn open(&self, args: &Vec<OsString>, insiders: bool) -> Result<()> {
+    pub fn open(&self, args: &[OsString], insiders: bool) -> Result<()> {
         let path =
             std::fs::canonicalize(self.path).wrap_err_with(|| "Error canonicalizing path")?;
-        let workspace_name: &str = &*path
+        let workspace_name: &str = &path
             .file_name()
             .ok_or_else(|| eyre!("Error getting workspace from path"))?
             .to_string_lossy();
@@ -49,7 +49,7 @@ impl<'a> Workspace<'a> {
         let hex = hex::encode(path);
         let uri = format!("vscode-remote://dev-container%2B{hex}/{workspace}");
 
-        let mut args = args.clone();
+        let mut args = args.to_owned();
         args.push(OsStr::new("--folder-uri").to_owned());
         args.push(OsStr::new(uri.as_str()).to_owned());
 
