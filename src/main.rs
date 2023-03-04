@@ -49,5 +49,5 @@ fn log_format(buf: &mut env_logger::fmt::Formatter, record: &log::Record) -> std
         log::Level::Error => format!("\x1b[31m{}\x1b[0m", level_char),
     };
 
-    write!(buf, "{}: {}", colored_level, record.args())
+    writeln!(buf, "{}: {}", colored_level, record.args())
 }
