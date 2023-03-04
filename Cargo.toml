@@ -1,0 +1,21 @@
+[package]
+name = "vscli"
+version = "0.1.0"
+edition = "2021"
+authors = ["Michael Lohr <michael@lohr.dev>"]
+description = "A CLI tool and library to control display settings on Windows written in Rust."
+readme = "README.md"
+repository = "https://github.com/michidk/vscli"
+documentation = "https://github.com/michidk/vscli"
+homepage = "https://github.com/michidk/vscli"
+license = "MIT"
+keywords = ["development", "settings", "cli"]
+categories = ["command-line-utilities", "config"]
+
+[dependencies]
+color-eyre = "0.6.2"
+env_logger = "0.10.0"
+hex = "0.4.3"
+log = "0.4.17"
+structopt = "0.3.26"
+wslpath = { git = "https://github.com/michidk/wsl-path-rust", commit = "d3b7d2155a7844dca6e73bec32a788b80ae514a6"} # until this is merged: https://github.com/pratikpc/wsl-path-rust/pull/1
