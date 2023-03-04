@@ -41,7 +41,7 @@ impl<'a> Workspace<'a> {
         if std::env::var("WSLENV").is_ok() {
             debug!("WSL detected");
             path =
-                wslpath::convert_path(path.as_str(), None, wslpath::Settings::WslToWindows, true)
+                wslpath2::convert(path.as_str(), None, wslpath2::Conversion::WslToWindows, true)
                     .map_err(|e| eyre!("Error while getting wslpath: {}", e))?;
         }
 
