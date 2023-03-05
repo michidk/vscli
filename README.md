@@ -33,7 +33,7 @@ brew install michidk/tools/vscli
 You can set a shorthand alias for `vscli` in your shell's configuration file:
 
 ```sh
-alias vs="vscli --insiders"
+alias vs="vscli --verbosity error"
 ```
 
 ## Usage
