@@ -75,9 +75,25 @@ impl<'a> Workspace<'a> {
     }
 }
 
-/// Executes the vscode executable with the given arguments.
+/// Executes the vscode executable with the given arguments on unix.
+#[cfg(unix)]
 fn exec_code(args: &Vec<OsString>, insiders: bool) -> Result<()> {
     let cmd = if insiders { "code-insiders" } else { "code" };
+
+    debug!("executable: {cmd}");
+    debug!("final args: {:?}", args);
+    Command::new(cmd).args(args).output()?;
+    Ok(())
+}
+
+/// Executes the vscode executable with the given arguments on Windows.
+#[cfg(windows)]
+fn exec_code(args: &Vec<OsString>, insiders: bool) -> Result<()> {
+    let cmd = "cmd";
+    let mut args = args.clone();
+    args.insert(0, OsString::from("/c"));
+    args.insert(1, if insiders { OsString::from("code-insiders") } else { OsString::from("code") });
+
     debug!("executable: {cmd}");
     debug!("final args: {:?}", args);
     Command::new(cmd).args(args).output()?;
