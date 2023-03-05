@@ -7,7 +7,6 @@ const LAUNCH_DETECT: &str = "detect";
 const LAUNCH_FORCE_CONTAINER: &str = "force-container";
 const LAUNCH_FORCE_CLASSIC: &str = "force-classic";
 
-
 /// Main CLI arguments
 #[derive(StructOpt, Debug)]
 #[structopt(
@@ -18,7 +17,7 @@ const LAUNCH_FORCE_CLASSIC: &str = "force-classic";
 )]
 pub struct Opts {
     /// The path of the vscode project to open
-    #[structopt(parse(from_os_str), default_value=".")]
+    #[structopt(parse(from_os_str), default_value = ".")]
     pub path: PathBuf,
 
     /// Aditional arguments to pass to vscode

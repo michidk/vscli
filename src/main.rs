@@ -13,7 +13,7 @@ mod workspace;
 
 use color_eyre::eyre::Result;
 use log::debug;
-use std::{io::Write};
+use std::io::Write;
 use structopt::StructOpt;
 
 use crate::{launch::Config, opts::Opts, workspace::Workspace};

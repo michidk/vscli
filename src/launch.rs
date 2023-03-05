@@ -7,16 +7,16 @@ use crate::{opts::LaunchBehaviour, workspace::Workspace};
 
 /// The configuration for the launch behaviour of vscode.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Config<'a> {
-    workspace: Workspace<'a>,
+pub struct Config {
+    workspace: Workspace,
     behaviour: LaunchBehaviour,
     insiders: bool,
     args: Vec<OsString>,
 }
 
-impl<'a> Config<'a> {
+impl Config {
     pub fn new(
-        workspace: Workspace<'a>,
+        workspace: Workspace,
         behaviour: LaunchBehaviour,
         insiders: bool,
         args: Vec<OsString>,
