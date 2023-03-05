@@ -6,23 +6,6 @@
 #![warn(clippy::pedantic)]
 
 //! A CLI tool to launch vscode projects, which supports devcontainers.
-//!
-//! USAGE:
-//!     vscli [FLAGS] [OPTIONS] <path> [args]...
-//!
-//! FLAGS:
-//!     -h, --help        Prints help information
-//!     -i, --insiders    Whether to launch the insiders version of vscode
-//!     -V, --version     Prints version information
-//!
-//! OPTIONS:
-//!     -b, --behaviour <behaviour>    Launch behaviour [default: detect]  [possible values: detect, force-container, force-
-//!                                    classic]
-//!     -v, --verbosity <verbosity>    The verbosity of the output [default: info]
-//!
-//! ARGS:
-//!     <path>       The path of the vscode project to open
-//!     <args>...    Input arguments to pass to vscode
 
 mod launch;
 mod opts;
@@ -30,7 +13,7 @@ mod workspace;
 
 use color_eyre::eyre::Result;
 use log::debug;
-use std::io::Write;
+use std::{io::Write};
 use structopt::StructOpt;
 
 use crate::{launch::Config, opts::Opts, workspace::Workspace};
