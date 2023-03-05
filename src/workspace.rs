@@ -47,8 +47,10 @@ impl Workspace {
             let dc_config = dc_folder.join("devcontainer.json");
             if dc_config.exists() && dc_config.is_file() {
                 debug!("Found devcontainer config: {}", dc_config.display());
-                workspace_folder = parse_workspace_folder_from_config(&dc_config)?;
-                debug!("Read workspace folder from config: {}", workspace_folder);
+                if let Ok(folder) = parse_workspace_folder_from_config(&dc_config) {
+                    debug!("Read workspace folder from config: {}", workspace_folder);
+                    workspace_folder = folder;
+                }
             }
         }
 
@@ -61,7 +63,8 @@ impl Workspace {
 
     /// Checks if the workspace has a devcontainer.
     pub fn has_devcontainer(&self) -> bool {
-        self.path.join(".devcontainer").exists()
+        let path = self.path.join(".devcontainer");
+        path.exists() && path.is_dir()
     }
 
     /// Open vscode using the devcontainer extension.
