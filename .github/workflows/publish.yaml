@@ -35,20 +35,6 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
-  publish-aur:
-    name: Publish to AUR
-    runs-on: ubuntu-latest
-    environment: "publish-aur"
-    steps:
-      - name: Update AUR package
-        uses: ATiltedTree/create-aur-release@v1
-        with:
-          package_name: vscli
-          package_version: ${{ github.event.inputs.tag-name }}
-          commit_username: "Jonas Grawe"
-          commit_email: "Shemnei@users.noreply.github.com"
-          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-
   publish-homebrew:
     name: Publish to Homebrew
     runs-on: ubuntu-latest

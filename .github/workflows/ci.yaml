@@ -18,7 +18,7 @@ on:
       - '.rustfmt.toml'
       - 'crates/**'
 
-name: punktf CI
+name: Test & Lint
 
 env:
   CARGO_INCREMENTAL: 0
