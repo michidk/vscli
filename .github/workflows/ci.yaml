@@ -1,41 +1,86 @@
-on: [push, pull_request]
+on:
+  pull_request:
+    paths:
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'rust-toolchain.toml'
+      - '.rustfmt.toml'
+      - 'crates/**'
+  push:
+    branches:
+      - main
+      - staging
+      - trying
+    paths:
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'rust-toolchain.toml'
+      - '.rustfmt.toml'
+      - 'crates/**'
 
-name: Continuous Integration
+name: punktf CI
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: short
+  RUSTFLAGS: "-D warnings -W rust-2021-compatibility"
+  RUSTUP_MAX_RETRIES: 10
 
 jobs:
-  check:
-    name: Check
-    runs-on: windows-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-      - name: Run cargo check
-        uses: actions-rs/cargo@v1
-        with:
-          command: check
-
   test:
     name: Test Suite
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
-      - name: Run cargo test
+        uses: actions/checkout@v3
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+
+      # This plugin should be loaded after toolchain setup
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+
+      # `test` is used instead of `build` to also include the test modules in
+      # the compilation check.
+      - name: Compile
         uses: actions-rs/cargo@v1
         with:
           command: test
+          args: --no-run
+
+      - name: Test
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: -- --nocapture --quiet
 
   lints:
     name: Lints
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+
+      - name: Install toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          components: rustfmt, clippy
+
+      # This pluging should be loaded after toolchain setup
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+
       - name: Run cargo fmt
         uses: actions-rs/cargo@v1
         with:
           command: fmt
           args: --all -- --check
+
       - name: Run cargo clippy
         uses: actions-rs/cargo@v1
         with:

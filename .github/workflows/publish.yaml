@@ -1,0 +1,67 @@
+on:
+  workflow_dispatch:
+    inputs:
+      tag-name:
+        description: 'The git tag to publish'
+        required: true
+        type: string
+
+name: Publish
+
+jobs:
+  publish-cratesio:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    environment: "publish-crates.io"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.inputs.tag-name }}
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+
+      - name: Upload to crates.io
+        uses: actions-rs/cargo@v1
+        # The lib crate might fail, when no changes to it where made
+        # This `if` makes sure the publishing continues
+        if: always()
+        with:
+          command: publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  publish-aur:
+    name: Publish to AUR
+    runs-on: ubuntu-latest
+    environment: "publish-aur"
+    steps:
+      - name: Update AUR package
+        uses: ATiltedTree/create-aur-release@v1
+        with:
+          package_name: vscli
+          package_version: ${{ github.event.inputs.tag-name }}
+          commit_username: "Jonas Grawe"
+          commit_email: "Shemnei@users.noreply.github.com"
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+
+  publish-homebrew:
+    name: Publish to Homebrew
+    runs-on: ubuntu-latest
+    environment: "publish-homebrew"
+    steps:
+      - name: Bump Homebrew formula
+        uses: mislav/bump-homebrew-formula-action@v2
+        with:
+          formula-name: vscli
+          homebrew-tap: michidk/homebrew-tools
+          create-pullrequest: true
+          tag-name: ${{ github.event.inputs.tag-name }}
+          download-url: "https://github.com/michidk/vscli/releases/download/${{ github.event.inputs.tag-name }}/vscli-x86_64-unknown-linux-musl.tar.gz"
+        env:
+          # PAT needs public_repo and workflow access
+          COMMITTER_TOKEN: ${{ secrets.COMMITTER_TOKEN }}
