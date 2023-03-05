@@ -1,3 +1,29 @@
+#![warn(
+    missing_docs,
+    missing_debug_implementations,
+    missing_copy_implementations
+)]
+#![warn(clippy::pedantic)]
+
+//! A CLI tool to launch vscode projects, which supports devcontainers.
+//!
+//! USAGE:
+//!     vscli [FLAGS] [OPTIONS] <path> [args]...
+//!
+//! FLAGS:
+//!     -h, --help        Prints help information
+//!     -i, --insiders    Whether to launch the insiders version of vscode
+//!     -V, --version     Prints version information
+//!
+//! OPTIONS:
+//!     -b, --behaviour <behaviour>    Launch behaviour [default: detect]  [possible values: detect, force-container, force-
+//!                                    classic]
+//!     -v, --verbosity <verbosity>    The verbosity of the output [default: info]
+//!
+//! ARGS:
+//!     <path>       The path of the vscode project to open
+//!     <args>...    Input arguments to pass to vscode
+
 mod launch;
 mod opts;
 mod workspace;
@@ -7,7 +33,7 @@ use log::debug;
 use std::io::Write;
 use structopt::StructOpt;
 
-use crate::{launch::LaunchConfig, opts::Opts, workspace::Workspace};
+use crate::{launch::Config, opts::Opts, workspace::Workspace};
 
 /// Entry point for `vscli`.
 fn main() -> Result<()> {
@@ -24,7 +50,7 @@ fn main() -> Result<()> {
     debug!("Parsed Opts:\n{:#?}", opts);
 
     let ws = Workspace::from_path(opts.path.as_path())?;
-    let lc = LaunchConfig::new(ws, opts.behaviour, opts.insiders, opts.args);
+    let lc = Config::new(ws, opts.behaviour, opts.insiders, opts.args);
     lc.launch()?;
 
     Ok(())
@@ -42,11 +68,11 @@ fn log_format(buf: &mut env_logger::fmt::Formatter, record: &log::Record) -> std
     };
     // color using shell escape codes
     let colored_level = match level {
-        log::Level::Trace => format!("\x1b[37m{}\x1b[0m", level_char),
-        log::Level::Debug => format!("\x1b[36m{}\x1b[0m", level_char),
-        log::Level::Info => format!("\x1b[32m{}\x1b[0m", level_char),
-        log::Level::Warn => format!("\x1b[33m{}\x1b[0m", level_char),
-        log::Level::Error => format!("\x1b[31m{}\x1b[0m", level_char),
+        log::Level::Trace => format!("\x1b[37m{level_char}\x1b[0m"),
+        log::Level::Debug => format!("\x1b[36m{level_char}\x1b[0m"),
+        log::Level::Info => format!("\x1b[32m{level_char}\x1b[0m"),
+        log::Level::Warn => format!("\x1b[33m{level_char}\x1b[0m"),
+        log::Level::Error => format!("\x1b[31m{level_char}\x1b[0m"),
     };
 
     writeln!(buf, "{}: {}", colored_level, record.args())

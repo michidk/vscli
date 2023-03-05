@@ -7,13 +7,14 @@ const LAUNCH_DETECT: &str = "detect";
 const LAUNCH_FORCE_CONTAINER: &str = "force-container";
 const LAUNCH_FORCE_CLASSIC: &str = "force-classic";
 
+/// Set the launch bevaiour of vscode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LaunchBehaviour {
-    /// use devcontainer if it was detected
+    /// Use devcontainer if it was detected
     Detect,
-    /// force open with devcontainer, even if no config was found
+    /// Force open with devcontainer, even if no config was found
     ForceContainer,
-    /// ignore devcontainers
+    /// Ignore devcontainers
     ForceClassic,
 }
 
@@ -31,6 +32,7 @@ impl FromStr for LaunchBehaviour {
 }
 
 impl LaunchBehaviour {
+    /// Returns all possible variants of the launch behaviour.
     fn variants() -> &'static [&'static str] {
         &[LAUNCH_DETECT, LAUNCH_FORCE_CONTAINER, LAUNCH_FORCE_CLASSIC]
     }
@@ -40,28 +42,28 @@ impl LaunchBehaviour {
 #[derive(StructOpt, Debug)]
 #[structopt(
     name = "vscli",
-    about = "Shorthand for opening vscode with devcontainer support.",
+    about = "A CLI tool to launch vscode projects, which supports devcontainers.",
     setting = clap::AppSettings::TrailingVarArg,
     setting = clap::AppSettings::AllowLeadingHyphen
 )]
 pub struct Opts {
-    /// Input path
+    /// The path of the vscode project to open
     #[structopt(parse(from_os_str))]
     pub path: PathBuf,
 
-    /// Input args
+    /// Input arguments to pass to vscode
     #[structopt(parse(from_os_str))]
     pub args: Vec<OsString>,
 
-    /// Open behaviour
+    /// Launch behaviour
     #[structopt(short, long, possible_values = &LaunchBehaviour::variants(), default_value = LAUNCH_DETECT, case_insensitive = true)]
     pub behaviour: LaunchBehaviour,
 
-    /// Use vscode-insiders
+    /// Whether to launch the insiders version of vscode
     #[structopt(short, long)]
     pub insiders: bool,
 
-    /// Output debug info
+    /// The verbosity of the output
     #[structopt(short, long, global = true, default_value = "info")]
     pub verbosity: log::LevelFilter,
 }

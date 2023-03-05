@@ -4,12 +4,14 @@ use std::ffi::{OsStr, OsString};
 use std::path::Path;
 use std::process::Command;
 
+/// A workspace is a folder which contains a vscode project.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Workspace<'a> {
     path: &'a Path,
 }
 
 impl<'a> Workspace<'a> {
+    /// Creates a new workspace from the given path.
     pub fn from_path(path: &'a Path) -> Result<Workspace<'a>> {
         // check for valid path
         if !path.exists() {
@@ -23,10 +25,12 @@ impl<'a> Workspace<'a> {
         Ok(Workspace { path })
     }
 
+    /// Checks if the workspace has a devcontainer.
     pub fn has_devcontainer(&self) -> bool {
         self.path.join(".devcontainer").exists()
     }
 
+    /// Open vscode using the devcontainer extension.
     pub fn open(&self, args: &[OsString], insiders: bool) -> Result<()> {
         let path =
             std::fs::canonicalize(self.path).wrap_err_with(|| "Error canonicalizing path")?;
@@ -34,15 +38,19 @@ impl<'a> Workspace<'a> {
             .file_name()
             .ok_or_else(|| eyre!("Error getting workspace from path"))?
             .to_string_lossy();
-        let workspace = format!("workspaces/{}", workspace_name); // TODO: read from devcontainers file in future (https://github.com/microsoft/vscode-remote-release/issues/2133#issuecomment-1430651840) using our custom devcontainer crate (push that to crates.io)
+        let workspace = format!("workspaces/{workspace_name}"); // TODO: read from devcontainers file in future (https://github.com/microsoft/vscode-remote-release/issues/2133#issuecomment-1430651840) using our custom devcontainer crate (push that to crates.io)
         let mut path: String = path.to_string_lossy().into_owned();
 
         // detect WSL
         if std::env::var("WSLENV").is_ok() {
             debug!("WSL detected");
-            path =
-                wslpath2::convert(path.as_str(), None, wslpath2::Conversion::WslToWindows, true)
-                    .map_err(|e| eyre!("Error while getting wslpath: {}", e))?;
+            path = wslpath2::convert(
+                path.as_str(),
+                None,
+                wslpath2::Conversion::WslToWindows,
+                true,
+            )
+            .map_err(|e| eyre!("Error while getting wslpath: {}", e))?;
         }
 
         debug!("encode: {path}");
@@ -67,6 +75,7 @@ impl<'a> Workspace<'a> {
     }
 }
 
+/// Executes the vscode executable with the given arguments.
 fn exec_code(args: &Vec<OsString>, insiders: bool) -> Result<()> {
     let cmd = if insiders { "code-insiders" } else { "code" };
     debug!("executable: {cmd}");
