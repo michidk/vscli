@@ -39,19 +39,35 @@ impl Workspace {
 
         // default workspace folder
         let mut workspace_folder = format!("/workspaces/{workspace_name}");
+        let mut config_path: Option<PathBuf> = None;
 
-        // check for devcontainer config to read custom workspace folder
-        let dc_folder = path.join(".devcontainer");
-        if dc_folder.exists() && dc_folder.is_dir() {
-            debug!("Found devcontainer folder: {}", dc_folder.display());
-            let dc_config = dc_folder.join("devcontainer.json");
-            if dc_config.exists() && dc_config.is_file() {
-                debug!("Found devcontainer config: {}", dc_config.display());
-                if let Ok(folder) = parse_workspace_folder_from_config(&dc_config) {
-                    debug!("Read workspace folder from config: {}", workspace_folder);
-                    workspace_folder = folder;
+        // find config; either `.devcontainer.json` or `.devcontainer/devcontainer.json`
+        let dc_config = path.join(".devcontainer.json");
+        if dc_config.is_file() {
+            debug!("Found devcontainer config: {}", dc_config.display());
+            config_path = Some(dc_config);
+        } else {
+            let dc_folder = path.join(".devcontainer");
+            if dc_folder.is_dir() {
+                debug!("Found devcontainer folder: {}", dc_folder.display());
+                let dc_config = dc_folder.join("devcontainer.json");
+                if dc_config.is_file() {
+                    debug!("Found devcontainer config: {}", dc_config.display());
+                    config_path = Some(dc_config);
+                } else {
+                    debug!("No devcontainer config found in `.devcontainer` folder");
                 }
             }
+        }
+
+        // parse workspace folder from config
+        if let Some(path) = config_path {
+            if let Ok(folder) = parse_workspace_folder_from_config(&path) {
+                debug!("Read workspace folder from config: {}", workspace_folder);
+                workspace_folder = folder;
+            }
+        } else {
+            debug!("No devcontainer config found, using default workspace folder");
         }
 
         Ok(Workspace {
@@ -63,8 +79,7 @@ impl Workspace {
 
     /// Checks if the workspace has a devcontainer.
     pub fn has_devcontainer(&self) -> bool {
-        let path = self.path.join(".devcontainer");
-        path.exists() && path.is_dir()
+        self.path.join(".devcontainer").is_dir() || self.path.join(".devcontainer.json").is_file()
     }
 
     /// Open vscode using the devcontainer extension.
