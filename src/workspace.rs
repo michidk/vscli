@@ -100,7 +100,7 @@ impl Workspace {
             .map_err(|e| eyre!("Error while getting wslpath: {}", e))?;
         }
 
-        debug!("encode: {path}");
+        trace!("encode: {path}");
         let hex = hex::encode(path);
         let uri = format!(
             "vscode-remote://dev-container%2B{hex}{}",
@@ -116,8 +116,8 @@ impl Workspace {
 
     /// Open vscode like with the `code` command
     pub fn open_classic(&self, args: &Vec<OsString>, insiders: bool) -> Result<()> {
-        debug!("path: {}", self.path.display());
-        debug!("args: {:?}", args);
+        trace!("path: {}", self.path.display());
+        trace!("args: {:?}", args);
 
         let mut args = args.clone();
         args.insert(0, self.path.as_os_str().to_owned());
