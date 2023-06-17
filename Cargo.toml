@@ -13,10 +13,10 @@ keywords = ["development", "settings", "cli"]
 categories = ["command-line-utilities"]
 
 [dependencies]
+clap = { version = "4.3.4", features = ["derive", "color", "help", "usage", "suggestions"] }
 color-eyre = "0.6.2"
 env_logger = "0.10.0"
 hex = "0.4.3"
 log = "0.4.17"
 serde_json = "1.0.93"
-structopt = "0.3.26"
 wslpath2 = "0.1.0"

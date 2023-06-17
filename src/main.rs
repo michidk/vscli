@@ -11,10 +11,10 @@ mod launch;
 mod opts;
 mod workspace;
 
+use clap::Parser;
 use color_eyre::eyre::Result;
 use log::debug;
 use std::io::Write;
-use structopt::StructOpt;
 
 use crate::{launch::Config, opts::Opts, workspace::Workspace};
 
@@ -22,7 +22,7 @@ use crate::{launch::Config, opts::Opts, workspace::Workspace};
 fn main() -> Result<()> {
     color_eyre::install()?;
 
-    let opts = Opts::from_args();
+    let opts = Opts::parse();
 
     env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or(opts.verbosity.as_str()),
