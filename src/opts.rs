@@ -38,20 +38,15 @@ pub struct Opts {
 }
 
 /// Set the launch bevaiour of vscode.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum LaunchBehaviour {
     /// Use devcontainer if it was detected
+    #[default]
     Detect,
     /// Force open with devcontainer, even if no config was found
     ForceContainer,
     /// Ignore devcontainers
     ForceClassic,
-}
-
-impl Default for LaunchBehaviour {
-    fn default() -> Self {
-        LaunchBehaviour::Detect
-    }
 }
 
 impl FromStr for LaunchBehaviour {
