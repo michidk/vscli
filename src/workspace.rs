@@ -1,5 +1,5 @@
 use color_eyre::eyre::{eyre, Result, WrapErr};
-use log::debug;
+use log::{debug, trace};
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -12,7 +12,7 @@ pub struct Workspace {
     /// The name of the workspace.
     workspace_name: String,
     /// The folder of the workspace in the container.
-    workspace_folder: String,
+    workspace_folder: Option<String>,
 }
 
 impl Workspace {
@@ -23,23 +23,20 @@ impl Workspace {
             return Err(eyre!("Path {} does not exist", path.display()));
         }
 
-        if !path.is_dir() {
-            return Err(eyre!("Path {} is not a folder", path.display()));
-        }
-
         // canonicalize path
         let path = std::fs::canonicalize(path).wrap_err_with(|| "Error canonicalizing path")?;
+        trace!("Canonicalized path: {}", path.to_string_lossy());
 
-        // get workspace name
+        // get workspace name (either directory or file name)
         let workspace_name = path
             .file_name()
             .ok_or_else(|| eyre!("Error getting workspace from path"))?
             .to_string_lossy()
             .into_owned();
+        trace!("Workspace name: {workspace_name}");
 
-        // default workspace folder
-        let mut workspace_folder = format!("/workspaces/{workspace_name}");
         let mut config_path: Option<PathBuf> = None;
+        let mut workspace_folder = None;
 
         // find config; either `.devcontainer.json` or `.devcontainer/devcontainer.json`
         let dc_config = path.join(".devcontainer.json");
@@ -60,21 +57,26 @@ impl Workspace {
             }
         }
 
-        // parse workspace folder from config
+        // parse workspace folder from .devcontainer config (if it exists)
         if let Some(path) = config_path {
             if let Ok(folder) = parse_workspace_folder_from_config(&path) {
-                debug!("Read workspace folder from config: {}", workspace_folder);
-                workspace_folder = folder;
+                debug!("Read workspace folder from config: {}", folder);
+                workspace_folder = Some(folder);
+            } else {
+                debug!("Could not read workspace folder from config -> using default folder");
+                workspace_folder = Some(format!("/workspaces/{workspace_name}"));
             }
         } else {
-            debug!("No devcontainer config found, using default workspace folder");
+            trace!("Devcontainer config not found, no workspace folder");
         }
 
-        Ok(Workspace {
+        let ws = Workspace {
             path,
             workspace_name,
             workspace_folder,
-        })
+        };
+        trace!("Workspace: {ws:?}");
+        Ok(ws)
     }
 
     /// Checks if the workspace has a devcontainer.
@@ -102,7 +104,7 @@ impl Workspace {
         let hex = hex::encode(path);
         let uri = format!(
             "vscode-remote://dev-container%2B{hex}{}",
-            self.workspace_folder
+            self.workspace_folder.as_ref().expect("open() cannot be called without setting a workspace folder; use open_classic when no devcontainer config is found.")
         );
 
         let mut args = args.to_owned();
