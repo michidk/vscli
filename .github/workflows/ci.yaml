@@ -1,22 +1,4 @@
-on:
-  pull_request:
-    paths:
-      - 'Cargo.lock'
-      - 'Cargo.toml'
-      - 'rust-toolchain.toml'
-      - '.rustfmt.toml'
-      - 'crates/**'
-  push:
-    branches:
-      - main
-      - staging
-      - trying
-    paths:
-      - 'Cargo.lock'
-      - 'Cargo.toml'
-      - 'rust-toolchain.toml'
-      - '.rustfmt.toml'
-      - 'crates/**'
+on: push
 
 name: Test & Lint
 
