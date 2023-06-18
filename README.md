@@ -43,24 +43,39 @@ alias vs="vscli --verbosity error"
 After installation, the `vscli` command will be available:
 
 ```sh
-USAGE:
-    vscli [FLAGS] [OPTIONS] <path> [args]...
+Usage: vscli [OPTIONS] [PATH] [ARGS]...
 
-FLAGS:
-    -h, --help        Prints help information
-    -i, --insiders    Whether to launch the insiders version of vscode
-    -V, --version     Prints version information
+Arguments:
+  [PATH]
+          The path of the vscode project to open
 
-OPTIONS:
-    -b, --behaviour <behaviour>    Launch behaviour [default: detect]  [possible values: detect, force-container, force-classic]
-    -v, --verbosity <verbosity>    The verbosity of the output [default: info]  [possible values: off, error, warn, info, debug, trace]
+          [default: .]
 
-ARGS:
-    <path>       The path of the vscode project to open [default: .]
-    <args>...    Aditional arguments to pass to vscode
+  [ARGS]...
+          Aditional arguments to pass to vscode
+
+Options:
+  -b, --behaviour <BEHAVIOUR>
+          Launch behaviour
+
+          [default: detect]
+
+          Possible values:
+          - detect:          Use devcontainer if it was detected
+          - force-container: Force open with devcontainer, even if no config was found
+          - force-classic:   Ignore devcontainers
+
+  -i, --insiders
+          Whether to launch the insiders version of vscode
+
+  -v, --verbosity <VERBOSITY>
+          The verbosity of the output
+
+          [default: info]
+
+  -h, --help
+          Print help (see a summary with '-h')
 ```
-
-This help is also available using the `--help` flag:
 
 ### Examples
 
@@ -86,3 +101,11 @@ You can launch the insiders version of vscode using the `--insiders` flag:
 ```sh
 vscli --insiders .                  # open vscode insiders in the current directory
 ```
+
+Additional arguments can be passed to the `code` executable, by specifying them after `--`:
+
+```sh
+vscli . -- --disable-gpu            # open vscode in the current directory without GPU hardware acceleration
+```
+
+Read more about the `code` flags, by executing `code --help`.
