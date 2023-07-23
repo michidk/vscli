@@ -7,16 +7,24 @@
 
 //! A CLI tool to launch vscode projects, which supports devcontainers.
 
+mod history;
 mod launch;
 mod opts;
+mod ui;
 mod workspace;
 
+use chrono::Utc;
 use clap::Parser;
 use color_eyre::eyre::Result;
 use log::debug;
 use std::io::Write;
 
-use crate::{launch::Config, opts::Opts, workspace::Workspace};
+use crate::{
+    history::{Entry, Tracker},
+    launch::{Behaviour, Config},
+    opts::{Commands, Opts},
+    workspace::Workspace,
+};
 
 /// Entry point for `vscli`.
 fn main() -> Result<()> {
@@ -32,9 +40,37 @@ fn main() -> Result<()> {
 
     debug!("Parsed Opts:\n{:#?}", opts);
 
-    let ws = Workspace::from_path(opts.path.as_path())?;
-    let lc = Config::new(ws, opts.behaviour, opts.insiders, opts.args);
-    lc.launch()?;
+    let mut tracker_path = dirs::home_dir().expect("Home dir not found");
+    tracker_path.push(".vscli_history.json");
+    let mut tracker = Tracker::load(&tracker_path)?;
+
+    match &opts.command {
+        Some(Commands::Recent) => {
+            ui::start(&tracker)?;
+        }
+        None => {
+            let path = opts.path.as_path();
+            let ws = Workspace::from_path(path)?;
+            let name = ws.workspace_name.clone();
+
+            let behaviour = Behaviour {
+                container: opts.behaviour,
+                insiders: opts.insiders,
+                args: opts.args,
+            };
+            let lc = Config::new(ws, behaviour.clone());
+            lc.launch()?;
+
+            tracker.push(Entry {
+                name,
+                path: path.to_path_buf(),
+                last_opened: Utc::now(),
+                behaviour,
+            });
+        }
+    }
+
+    tracker.store()?;
 
     Ok(())
 }

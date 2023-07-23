@@ -13,10 +13,15 @@ keywords = ["development", "settings", "cli"]
 categories = ["command-line-utilities"]
 
 [dependencies]
+chrono = { version = "0.4.26", default-features = false, features = ["std", "clock", "serde"] }
 clap = { version = "4.3.4", features = ["derive", "color", "help", "usage", "suggestions"] }
 color-eyre = "0.6.2"
+crossterm = "0.26.1"
+dirs = "5.0.1"
 env_logger = "0.10.0"
 hex = "0.4.3"
 log = "0.4.17"
+serde = { version = "1.0.164", features = ["derive"] }
 serde_json = "1.0.93"
+tui = "0.19.0"
 wslpath2 = "0.1.0"

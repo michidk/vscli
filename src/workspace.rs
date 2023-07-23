@@ -5,12 +5,12 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// A workspace is a folder which contains a vscode project.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Workspace {
     /// The path of the workspace.
     path: PathBuf,
     /// The name of the workspace.
-    workspace_name: String,
+    pub workspace_name: String,
     /// The folder of the workspace in the container.
     workspace_folder: Option<String>,
 }
