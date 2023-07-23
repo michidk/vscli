@@ -129,6 +129,8 @@ impl Workspace {
 #[cfg(unix)]
 fn exec_code(args: &Vec<OsString>, insiders: bool) -> Result<()> {
     let cmd = if insiders { "code-insiders" } else { "code" };
+    // test if cmd exists
+    Command::new(cmd).arg("-v").output().wrap_err_with(|| format!("`{cmd}` does not exists."))?;
 
     debug!("executable: {cmd}");
     debug!("final args: {:?}", args);
@@ -150,6 +152,9 @@ fn exec_code(args: &Vec<OsString>, insiders: bool) -> Result<()> {
             OsString::from("code")
         },
     );
+
+    // test if cmd exists
+    Command::new(cmd).arg("-v").output().wrap_err_with(|| format!("`{cmd}` does not exists."))?;
 
     debug!("executable: {cmd}");
     debug!("final args: {:?}", args);
