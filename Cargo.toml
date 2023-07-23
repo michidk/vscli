@@ -1,6 +1,6 @@
 [package]
 name = "vscli"
-version = "0.1.4"
+version = "0.1.5"
 edition = "2021"
 authors = ["Michael Lohr <michael@lohr.dev>"]
 description = "A CLI tool to launch vscode projects, which supports devcontainers."
@@ -12,11 +12,20 @@ license = "MIT"
 keywords = ["development", "settings", "cli"]
 categories = ["command-line-utilities"]
 
+[features]
+default = ["recent-ui"]
+recent-ui = ["crossterm", "chrono", "ratatui"]
+
 [dependencies]
+chrono = { version = "0.4.26", default-features = false, features = ["std", "clock", "serde"], optional = true }
 clap = { version = "4.3.4", features = ["derive", "color", "help", "usage", "suggestions"] }
 color-eyre = "0.6.2"
+crossterm = { version = "0.27.0", optional = true }
+dirs = "5.0.1"
 env_logger = "0.10.0"
 hex = "0.4.3"
 log = "0.4.17"
-serde_json = "1.0.93"
+ratatui = { version = "0.23.0", optional = true }
+serde = { version = "1.0.164", features = ["derive"] }
+serde_json = { version = "1.0.93" }
 wslpath2 = "0.1.0"

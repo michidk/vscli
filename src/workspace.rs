@@ -5,12 +5,12 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// A workspace is a folder which contains a vscode project.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Workspace {
     /// The path of the workspace.
     path: PathBuf,
     /// The name of the workspace.
-    workspace_name: String,
+    pub workspace_name: String,
     /// The folder of the workspace in the container.
     workspace_folder: Option<String>,
 }
@@ -85,7 +85,7 @@ impl Workspace {
     }
 
     /// Open vscode using the devcontainer extension.
-    pub fn open(&self, args: &[OsString], insiders: bool) -> Result<()> {
+    pub fn open(&self, args: &[OsString], insiders: bool, dry_run: bool) -> Result<()> {
         let mut path: String = self.path.to_string_lossy().into_owned();
 
         // detect WSL
@@ -111,36 +111,45 @@ impl Workspace {
         args.push(OsStr::new("--folder-uri").to_owned());
         args.push(OsStr::new(uri.as_str()).to_owned());
 
-        exec_code(&args, insiders).wrap_err_with(|| "Error opening vscode using devcontainers...")
+        exec_code(&args, insiders, dry_run)
+            .wrap_err_with(|| "Error opening vscode using devcontainers...")
     }
 
     /// Open vscode like with the `code` command
-    pub fn open_classic(&self, args: &Vec<OsString>, insiders: bool) -> Result<()> {
+    pub fn open_classic(&self, args: &Vec<OsString>, insiders: bool, dry_run: bool) -> Result<()> {
         trace!("path: {}", self.path.display());
         trace!("args: {:?}", args);
 
         let mut args = args.clone();
         args.insert(0, self.path.as_os_str().to_owned());
-        exec_code(&args, insiders).wrap_err_with(|| "Error opening vscode the classic way...")
+        exec_code(&args, insiders, dry_run)
+            .wrap_err_with(|| "Error opening vscode the classic way...")
     }
 }
 
 /// Executes the vscode executable with the given arguments on unix.
 #[cfg(unix)]
-fn exec_code(args: &Vec<OsString>, insiders: bool) -> Result<()> {
+fn exec_code(args: &Vec<OsString>, insiders: bool, dry_run: bool) -> Result<()> {
     let cmd = if insiders { "code-insiders" } else { "code" };
     // test if cmd exists
-    Command::new(cmd).arg("-v").output().wrap_err_with(|| format!("`{cmd}` does not exists."))?;
+    Command::new(cmd)
+        .arg("-v")
+        .output()
+        .wrap_err_with(|| format!("`{cmd}` does not exists."))?;
 
     debug!("executable: {cmd}");
     debug!("final args: {:?}", args);
-    Command::new(cmd).args(args).output()?;
+
+    if !dry_run {
+        Command::new(cmd).args(args).output()?;
+    }
+
     Ok(())
 }
 
 /// Executes the vscode executable with the given arguments on Windows.
 #[cfg(windows)]
-fn exec_code(args: &Vec<OsString>, insiders: bool) -> Result<()> {
+fn exec_code(args: &Vec<OsString>, insiders: bool, dry_run: bool) -> Result<()> {
     let cmd = "cmd";
     let mut args = args.clone();
     args.insert(0, OsString::from("/c"));
@@ -154,11 +163,18 @@ fn exec_code(args: &Vec<OsString>, insiders: bool) -> Result<()> {
     );
 
     // test if cmd exists
-    Command::new(cmd).arg("-v").output().wrap_err_with(|| format!("`{cmd}` does not exists."))?;
+    Command::new(cmd)
+        .arg("-v")
+        .output()
+        .wrap_err_with(|| format!("`{cmd}` does not exists."))?;
 
     debug!("executable: {cmd}");
     debug!("final args: {:?}", args);
-    Command::new(cmd).args(args).output()?;
+
+    if !dry_run {
+        Command::new(cmd).args(args).output()?;
+    }
+
     Ok(())
 }
 

@@ -7,16 +7,29 @@
 
 //! A CLI tool to launch vscode projects, which supports devcontainers.
 
+#[cfg(feature = "recent-ui")]
+mod history;
 mod launch;
 mod opts;
+#[cfg(feature = "recent-ui")]
+mod ui;
 mod workspace;
 
+#[cfg(feature = "recent-ui")]
+use chrono::Utc;
 use clap::Parser;
 use color_eyre::eyre::Result;
 use log::debug;
 use std::io::Write;
 
-use crate::{launch::Config, opts::Opts, workspace::Workspace};
+#[cfg(feature = "recent-ui")]
+use crate::history::{Entry, Tracker};
+
+use crate::{
+    launch::{Behaviour, Config},
+    opts::Opts,
+    workspace::Workspace,
+};
 
 /// Entry point for `vscli`.
 fn main() -> Result<()> {
@@ -32,9 +45,59 @@ fn main() -> Result<()> {
 
     debug!("Parsed Opts:\n{:#?}", opts);
 
-    let ws = Workspace::from_path(opts.path.as_path())?;
-    let lc = Config::new(ws, opts.behaviour, opts.insiders, opts.args);
-    lc.launch()?;
+    let mut tracker_path = dirs::data_local_dir().expect("Local data dir not found.");
+    tracker_path.push("vscli");
+    tracker_path.push(".vscli_history.json");
+
+    #[cfg(feature = "recent-ui")]
+    let mut tracker = Tracker::load(&tracker_path)?;
+
+    match &opts.command {
+        #[cfg(feature = "recent-ui")]
+        Some(opts::Commands::Recent) => {
+            let res = ui::start(&mut tracker)?;
+            if let Some(entry) = res {
+                let ws = Workspace::from_path(&entry.path)?;
+                let name = ws.workspace_name.clone();
+                let lc = Config::new(ws, entry.behaviour.clone(), opts.dry_run);
+                lc.launch()?;
+
+                tracker.push(Entry {
+                    name,
+                    path: entry.path.clone(),
+                    last_opened: Utc::now(),
+                    behaviour: entry.behaviour.clone(),
+                });
+            }
+        }
+        None => {
+            let path = opts.path.as_path();
+            let ws = Workspace::from_path(path)?;
+            #[cfg(feature = "recent-ui")]
+            let name = ws.workspace_name.clone();
+
+            let behaviour = Behaviour {
+                strategy: opts.behaviour,
+                insiders: opts.insiders,
+                args: opts.args,
+            };
+            let lc = Config::new(ws, behaviour.clone(), opts.dry_run);
+            lc.launch()?;
+
+            #[cfg(feature = "recent-ui")]
+            tracker.push(Entry {
+                name,
+                path: path.canonicalize()?,
+                last_opened: Utc::now(),
+                behaviour,
+            });
+        }
+        #[allow(unreachable_patterns)]
+        _ => {}
+    }
+
+    #[cfg(feature = "recent-ui")]
+    tracker.store()?;
 
     Ok(())
 }
