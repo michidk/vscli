@@ -21,7 +21,7 @@ dirs = "5.0.1"
 env_logger = "0.10.0"
 hex = "0.4.3"
 log = "0.4.17"
+ratatui = "0.22.0"
 serde = { version = "1.0.164", features = ["derive"] }
 serde_json = "1.0.93"
-tui = "0.19.0"
 wslpath2 = "0.1.0"

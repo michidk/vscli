@@ -1,64 +1,36 @@
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Result, eyre};
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use std::io;
-use tui::{
+use ratatui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Layout},
-    style::{Color, Modifier, Style},
+    style::{Color, Style},
     widgets::{Block, Borders, Cell, Row, Table, TableState},
     Frame, Terminal,
 };
+use std::{borrow::Cow, io};
 
-use crate::history::{Entry, Tracker};
+use crate::history::{Tracker, Entry};
 
-struct UI<'a> {
+struct UI<'a, 'b> {
     state: TableState,
-    tracker: &'a Tracker<'a>,
-    history: Vec<Entry>,
-    // items: Vec<Item<'a>>,
+    tracker: &'a mut Tracker<'b>,
 }
 
-// struct Item<'a> {
-//     entry: &'a Entry,
-//     formatted_time: String,
-// }
-
-impl<'a> UI<'a> {
-    fn new(tracker: &'a Tracker) -> UI<'a> {
-        let history = tracker.get_sorted_history_vec();
-        // let mut items: Vec<Item> = vec![];
-        // for entry in history {
-        //     items.push(Item {
-        //         entry: &entry,
-        //         formatted_time: entry
-        //             .last_opened
-        //             .clone()
-        //             .format("%Y-%m-%d %H:%M:%S")
-        //             .to_string(),
-        //     });
-        // }
-        // let items = history.iter().map(|entry| {
-        //     Item {
-        //         entry,
-        //         formatted_time: entry.last_opened.clone().format("%Y-%m-%d %H:%M:%S").to_string(),
-        //     }
-        // }).collect();
-
+impl<'a, 'b> UI<'a, 'b> {
+    fn new(tracker: &'a mut Tracker<'b>) -> UI<'a, 'b> {
         UI {
             state: TableState::default(),
             tracker,
-            history,
-            // items,
         }
     }
     pub fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
-                if i >= self.history.len() - 1 {
+                if i >= self.tracker.history.len() - 1 {
                     0
                 } else {
                     i + 1
@@ -73,7 +45,7 @@ impl<'a> UI<'a> {
         let i = match self.state.selected() {
             Some(i) => {
                 if i == 0 {
-                    self.history.len() - 1
+                    self.tracker.history.len() - 1
                 } else {
                     i - 1
                 }
@@ -84,7 +56,7 @@ impl<'a> UI<'a> {
     }
 }
 
-pub(crate) fn start(tracker: &Tracker) -> Result<()> {
+pub(crate) fn start<'a, 'b>(tracker: &'a mut Tracker<'b>) -> Result<Option<Entry>> {
     // setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -92,9 +64,9 @@ pub(crate) fn start(tracker: &Tracker) -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
+
     // create app and run it
-    let app = UI::new(tracker);
-    let res = run_app(&mut terminal, app);
+    let res = run_app(&mut terminal, UI::<'a, 'b>::new(tracker));
 
     // restore terminal
     disable_raw_mode()?;
@@ -105,22 +77,31 @@ pub(crate) fn start(tracker: &Tracker) -> Result<()> {
     )?;
     terminal.show_cursor()?;
 
-    if let Err(err) = res {
-        println!("{:?}", err)
+    match res {
+        Ok(None) => {},
+        Ok(Some(index)) => {
+            return Ok(tracker.history.iter().nth(index).map(Clone::clone))
+        }
+        Err(message) => Err(eyre!("Error: {:?}", message))?,
     }
 
-    Ok(())
+    Ok(None)
 }
 
-fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: UI) -> io::Result<()> {
+fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: UI) -> io::Result<Option<usize>> {
     loop {
         terminal.draw(|f| render(f, &mut app))?;
 
         if let Event::Key(key) = event::read()? {
             match key.code {
-                KeyCode::Char('q') | KeyCode::Esc | KeyCode::Backspace => return Ok(()),
+                KeyCode::Char('q') | KeyCode::Esc | KeyCode::Backspace => return Ok(None),
                 KeyCode::Down => app.next(),
                 KeyCode::Up => app.previous(),
+                KeyCode::Enter | KeyCode::Char('o') => {
+                    if let Some(selected) = app.state.selected() {
+                        return Ok(Some(selected));
+                    }
+                }
                 _ => {}
             }
         }
@@ -130,42 +111,42 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: UI) -> io::Result<()
 fn render<B: Backend>(f: &mut Frame<B>, app: &mut UI) {
     let rects = Layout::default()
         .constraints([Constraint::Percentage(100)].as_ref())
-        .margin(5)
+        .margin(1)
         .split(f.size());
 
-    let selected_style = Style::default().add_modifier(Modifier::REVERSED);
+    let selected_style = Style::default().bg(Color::Gray);
     let normal_style = Style::default().bg(Color::Blue);
     let header_cells = ["Name", "Path", "Last Opened"]
         .iter()
-        .map(|h| Cell::from(*h).style(Style::default().fg(Color::Red)));
-    let header = Row::new(header_cells)
-        .style(normal_style)
-        .height(1)
-        .bottom_margin(1);
-    let rows = app.history.iter().map(|item| {
-        let cells: Vec<&str> = vec![
-            &item.name,
-            item.path
-                .to_str()
-                .expect("Could not convert path to string."),
-            "test", // &item.formatted_time,
+        .map(|h| Cell::from(*h).style(Style::default().fg(Color::White)));
+    let header = Row::new(header_cells).style(normal_style).height(1);
+    let rows = app.tracker.history.iter().map(|item| {
+        let cells: Vec<Cow<'_, str>> = vec![
+            Cow::Borrowed(&item.name),
+            item.path.to_string_lossy(),
+            Cow::Owned(
+                item.last_opened
+                    .clone()
+                    .format("%Y-%m-%d %H:%M:%S")
+                    .to_string(),
+            ),
         ];
 
-        Row::new(cells).height(1).bottom_margin(1)
+        Row::new(cells).height(1)
     });
     let t = Table::new(rows)
         .header(header)
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("Recent workspaces"),
+                .title("VSCLI - Recent Workspaces"),
         )
         .highlight_style(selected_style)
         .highlight_symbol("> ")
         .widths(&[
+            Constraint::Percentage(20),
             Constraint::Percentage(50),
-            Constraint::Length(30),
-            Constraint::Min(10),
+            Constraint::Percentage(30),
         ]);
     f.render_stateful_widget(t, rects[0], &mut app.state);
 }

@@ -30,6 +30,10 @@ pub(crate) struct Opts {
     #[arg(short, long)]
     pub insiders: bool,
 
+    /// Whether to lauch in dry-run mode (not actually open vscode)
+    #[arg(short, long)]
+    pub dry_run: bool,
+
     /// The verbosity of the output
     #[arg(short, long, global = true, default_value = "info", ignore_case = true)]
     pub verbosity: log::LevelFilter,

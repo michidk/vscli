@@ -40,13 +40,28 @@ fn main() -> Result<()> {
 
     debug!("Parsed Opts:\n{:#?}", opts);
 
-    let mut tracker_path = dirs::home_dir().expect("Home dir not found");
+    let mut tracker_path = dirs::data_local_dir().expect("Local data dir not found.");
+    tracker_path.push("vscli");
     tracker_path.push(".vscli_history.json");
+
     let mut tracker = Tracker::load(&tracker_path)?;
 
     match &opts.command {
         Some(Commands::Recent) => {
-            ui::start(&tracker)?;
+            let res = ui::start(&mut tracker)?;
+            if let Some(entry) = res {
+                let ws = Workspace::from_path(&entry.path)?;
+                let name = ws.workspace_name.clone();
+                let lc = Config::new(ws, entry.behaviour.clone(), opts.dry_run);
+                lc.launch()?;
+
+                tracker.push(Entry {
+                    name,
+                    path: entry.path.clone(),
+                    last_opened: Utc::now(),
+                    behaviour: entry.behaviour.clone(),
+                });
+            }
         }
         None => {
             let path = opts.path.as_path();
@@ -58,12 +73,12 @@ fn main() -> Result<()> {
                 insiders: opts.insiders,
                 args: opts.args,
             };
-            let lc = Config::new(ws, behaviour.clone());
+            let lc = Config::new(ws, behaviour.clone(), opts.dry_run);
             lc.launch()?;
 
             tracker.push(Entry {
                 name,
-                path: path.to_path_buf(),
+                path: path.canonicalize()?,
                 last_opened: Utc::now(),
                 behaviour,
             });
