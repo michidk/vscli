@@ -44,7 +44,8 @@ pub(crate) struct Opts {
 
 #[derive(Subcommand, Debug)]
 pub(crate) enum Commands {
-    /// The recent UI command
+    /// Opens an interactive list of recently used workspaces
+    #[cfg(feature = "recent-ui")]
     #[clap(alias = "ui")]
     Recent,
 }

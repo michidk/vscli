@@ -1,4 +1,4 @@
-use std::{ffi::OsString, str::FromStr};
+use std::{ffi::OsString, fmt::Display, str::FromStr};
 
 use clap::ValueEnum;
 use color_eyre::eyre::{self, eyre, Result};
@@ -49,10 +49,20 @@ impl FromStr for ContainerStrategy {
     }
 }
 
+impl Display for ContainerStrategy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Detect => write!(f, "{LAUNCH_DETECT}"),
+            Self::ForceContainer => write!(f, "{LAUNCH_FORCE_CONTAINER}"),
+            Self::ForceClassic => write!(f, "{LAUNCH_FORCE_CLASSIC}"),
+        }
+    }
+}
+
 /// The launch behaviour that is used to start vscode.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Behaviour {
-    pub container: ContainerStrategy,
+    pub strategy: ContainerStrategy,
     pub insiders: bool,
     pub args: Vec<OsString>,
 }
@@ -76,7 +86,7 @@ impl Config {
 
     /// Launches vscode with the given configuration.
     pub fn launch(&self) -> Result<()> {
-        match self.behaviour.container {
+        match self.behaviour.strategy {
             ContainerStrategy::Detect => {
                 if self.workspace.has_devcontainer() {
                     info!("Opening devcontainer...");

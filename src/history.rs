@@ -1,11 +1,12 @@
 use chrono::{DateTime, Utc};
-use color_eyre::eyre::{Result, eyre};
+use color_eyre::eyre::{eyre, Context, Result};
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::{
+    cmp::Ordering,
     collections::BTreeSet,
-    fs::{File, self},
-    path::{Path, PathBuf}, cmp::Ordering,
+    fs::{self, File},
+    path::{Path, PathBuf},
 };
 
 use crate::launch::Behaviour;
@@ -67,9 +68,27 @@ impl<'a> Tracker<'a> {
             let file = File::open(path.clone())?;
             let history: Result<History, serde_json::Error> = serde_json::from_reader(file);
 
-            // ignore parsing errors, just reset the file
-            if history.is_err() {
-                warn!("Could not read history file, resetting.");
+            // ignore parsing errors
+            // move the file and start from scratch
+            if let Err(err) = history {
+                // find a non-existent backup file
+                let new_path = (0..10_000) // Set an upper limit of filename checks.
+                    .map(|i| path.with_file_name(format!(".vscli_history_{i}.json.bak")))
+                    .find(|path| !path.exists())
+                    .unwrap_or_else(|| path.with_file_name(".vscli_history.json.bak"));
+
+                fs::rename(path, new_path.clone()).wrap_err_with(|| {
+                    format!(
+                        "Could not move history file from `{}` to `{}`",
+                        path.to_string_lossy(),
+                        new_path.to_string_lossy()
+                    )
+                })?;
+
+                warn!(
+                    "Could not read history file: {err}\nMoved broken file to `{}`",
+                    new_path.to_string_lossy()
+                );
                 return Ok(Self {
                     path,
                     history: BTreeSet::new(),
@@ -96,11 +115,16 @@ impl<'a> Tracker<'a> {
 
     /// Saves the history, guarateering a size of `MAX_HISTORY_ENTRIES`
     pub fn store(self) -> Result<()> {
-        fs::create_dir_all(self.path.parent().ok_or_else(|| eyre!("Parent directory not found"))?)?;
+        fs::create_dir_all(
+            self.path
+                .parent()
+                .ok_or_else(|| eyre!("Parent directory not found"))?,
+        )?;
         let file = File::create(self.path)?;
 
         // since history is sorted, be can remove the first entries to limit the max size
-        let history: History = self.history
+        let history: History = self
+            .history
             .iter()
             .rev()
             .take(MAX_HISTORY_ENTRIES)

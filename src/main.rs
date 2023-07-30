@@ -7,22 +7,27 @@
 
 //! A CLI tool to launch vscode projects, which supports devcontainers.
 
+#[cfg(feature = "recent-ui")]
 mod history;
 mod launch;
 mod opts;
+#[cfg(feature = "recent-ui")]
 mod ui;
 mod workspace;
 
+#[cfg(feature = "recent-ui")]
 use chrono::Utc;
 use clap::Parser;
 use color_eyre::eyre::Result;
 use log::debug;
 use std::io::Write;
 
+#[cfg(feature = "recent-ui")]
+use crate::history::{Entry, Tracker};
+
 use crate::{
-    history::{Entry, Tracker},
     launch::{Behaviour, Config},
-    opts::{Commands, Opts},
+    opts::Opts,
     workspace::Workspace,
 };
 
@@ -44,10 +49,12 @@ fn main() -> Result<()> {
     tracker_path.push("vscli");
     tracker_path.push(".vscli_history.json");
 
+    #[cfg(feature = "recent-ui")]
     let mut tracker = Tracker::load(&tracker_path)?;
 
     match &opts.command {
-        Some(Commands::Recent) => {
+        #[cfg(feature = "recent-ui")]
+        Some(opts::Commands::Recent) => {
             let res = ui::start(&mut tracker)?;
             if let Some(entry) = res {
                 let ws = Workspace::from_path(&entry.path)?;
@@ -66,16 +73,18 @@ fn main() -> Result<()> {
         None => {
             let path = opts.path.as_path();
             let ws = Workspace::from_path(path)?;
+            #[cfg(feature = "recent-ui")]
             let name = ws.workspace_name.clone();
 
             let behaviour = Behaviour {
-                container: opts.behaviour,
+                strategy: opts.behaviour,
                 insiders: opts.insiders,
                 args: opts.args,
             };
             let lc = Config::new(ws, behaviour.clone(), opts.dry_run);
             lc.launch()?;
 
+            #[cfg(feature = "recent-ui")]
             tracker.push(Entry {
                 name,
                 path: path.canonicalize()?,
@@ -83,8 +92,11 @@ fn main() -> Result<()> {
                 behaviour,
             });
         }
+        #[allow(unreachable_patterns)]
+        _ => {}
     }
 
+    #[cfg(feature = "recent-ui")]
     tracker.store()?;
 
     Ok(())
