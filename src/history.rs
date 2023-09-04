@@ -51,10 +51,10 @@ impl PartialOrd for Entry {
 }
 
 /// Contains the recent used workspaces
-/// Note: `BTreeSet` so its sorted and uninque
+/// Note: `BTreeSet` so it's sorted and uninque
 pub type History = BTreeSet<Entry>;
 
-/// The struct that manages the history and tracks the workspaces
+/// Manages the history and tracks the workspaces
 pub struct Tracker<'a> {
     path: &'a Path,
     pub history: History,

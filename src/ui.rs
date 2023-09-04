@@ -17,18 +17,22 @@ use std::{borrow::Cow, io};
 
 use crate::history::{Entry, Tracker};
 
+/// The UI state
 struct UI<'a, 'b> {
     state: TableState,
     tracker: &'a mut Tracker<'b>,
 }
 
 impl<'a, 'b> UI<'a, 'b> {
+    /// Create new empty state from history tracker reference
     fn new(tracker: &'a mut Tracker<'b>) -> UI<'a, 'b> {
         UI {
             state: TableState::default(),
             tracker,
         }
     }
+
+    /// Select the next entry
     pub fn next(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
@@ -43,6 +47,7 @@ impl<'a, 'b> UI<'a, 'b> {
         self.state.select(Some(i));
     }
 
+    /// Select the previous entry
     pub fn previous(&mut self) {
         let i = match self.state.selected() {
             Some(i) => {
@@ -58,6 +63,7 @@ impl<'a, 'b> UI<'a, 'b> {
     }
 }
 
+/// Starts the UI and returns the selected/resulting entry
 pub(crate) fn start(tracker: &mut Tracker<'_>) -> Result<Option<Entry>> {
     // setup terminal
     enable_raw_mode()?;
@@ -87,6 +93,7 @@ pub(crate) fn start(tracker: &mut Tracker<'_>) -> Result<Option<Entry>> {
     Ok(None)
 }
 
+/// UI main loop
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: UI) -> io::Result<Option<usize>> {
     loop {
         terminal.draw(|f| render(f, &mut app))?;
@@ -113,7 +120,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: UI) -> io::Result<Op
     }
 }
 
+/// Renders the UI
 fn render<B: Backend>(frame: &mut Frame<B>, app: &mut UI) {
+    // Setup crossterm UI layout & style
     let area = Layout::default()
         .constraints([Constraint::Percentage(100), Constraint::Min(2)].as_ref())
         .margin(1)
@@ -140,6 +149,7 @@ fn render<B: Backend>(frame: &mut Frame<B>, app: &mut UI) {
         Row::new(cells).height(1)
     });
 
+    // Limit the length of workspace names displayed
     let longest_name: u16 = u16::min(
         app.tracker
             .history
@@ -158,6 +168,7 @@ fn render<B: Backend>(frame: &mut Frame<B>, app: &mut UI) {
         Constraint::Min(20),
     ];
 
+    // Setup the table
     let table = Table::new(rows)
         .header(header)
         .block(
@@ -175,13 +186,11 @@ fn render<B: Backend>(frame: &mut Frame<B>, app: &mut UI) {
         .history
         .iter()
         .nth(app.state.selected().unwrap_or(0));
-    let strategy = selected.map_or(String::from("-"), |item| {
-        item.behaviour.strategy.to_string()
-    });
-    let insiders = selected.map_or(String::from("-"), |entry| {
-        entry.behaviour.insiders.to_string()
-    });
-    let args_count = selected.map_or(String::from("0"), |entry| {
+
+    // Gather additional information for the status area
+    let strategy = map_or_default(selected, "-", |item| item.behaviour.strategy.to_string());
+    let insiders = map_or_default(selected, "-", |entry| entry.behaviour.insiders.to_string());
+    let args_count = map_or_default(selected, "0", |entry| {
         entry.behaviour.args.len().to_string()
     });
     let args = selected.map_or(String::from("-"), |entry| {
@@ -198,6 +207,7 @@ fn render<B: Backend>(frame: &mut Frame<B>, app: &mut UI) {
         converted_str.join(" ")
     });
 
+    // Render status area
     let additional_info = Span::styled(
         format!("Strategy: {strategy}, Insiders: {insiders}, Args ({args_count}): {args}"),
         Style::default().fg(Color::DarkGray),
@@ -214,6 +224,7 @@ fn render<B: Backend>(frame: &mut Frame<B>, app: &mut UI) {
         .alignment(Alignment::Right);
     frame.render_widget(additional_info_par, status_area[1]);
 
+    // Instructions
     let instruction = Span::styled(
         "Press x to remove the selected item.",
         Style::default().fg(Color::DarkGray),
@@ -221,5 +232,12 @@ fn render<B: Backend>(frame: &mut Frame<B>, app: &mut UI) {
     let instructions_par = Paragraph::new(instruction)
         .block(status_block)
         .alignment(Alignment::Left);
+
+    // Render
     frame.render_widget(instructions_par, status_area[0]);
+}
+
+/// Maps an option to a string, using a default value if the option is `None`
+fn map_or_default<T, F: Fn(T) -> String>(option: Option<T>, default: &str, f: F) -> String {
+    option.map_or(default.to_string(), f)
 }
