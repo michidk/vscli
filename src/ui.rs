@@ -175,7 +175,9 @@ fn render<B: Backend>(frame: &mut Frame<B>, app: &mut UI) {
         .history
         .iter()
         .nth(app.state.selected().unwrap_or(0));
-    let strategy = selected.map_or(String::from("-"), |item| item.behaviour.strategy.to_string());
+    let strategy = selected.map_or(String::from("-"), |item| {
+        item.behaviour.strategy.to_string()
+    });
     let insiders = selected.map_or(String::from("-"), |entry| {
         entry.behaviour.insiders.to_string()
     });
@@ -220,5 +222,4 @@ fn render<B: Backend>(frame: &mut Frame<B>, app: &mut UI) {
         .block(status_block)
         .alignment(Alignment::Left);
     frame.render_widget(instructions_par, status_area[0]);
-
 }
