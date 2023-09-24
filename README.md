@@ -4,11 +4,14 @@
 
 A CLI tool to launch vscode projects, which supports [devcontainers](https://containers.dev/).
 
+![Screenshot showing the recent UI feature.](.github/images/recent.png)
+
 ## Features
 
 - A shorthand for launching vscode projects
 - Detects whether a project is a [devcontainers](https://containers.dev/) project, and launches the devcontainer instead
 - Supports the [insiders](https://code.visualstudio.com/insiders/) version of vscode
+- Tracks your projects and allows you to open them using an CLI-based UI
 
 ## Installation
 
@@ -42,6 +45,7 @@ You can set a shorthand alias for `vscli` in your shell's configuration file:
 
 ```sh
 alias vs="vscli --verbosity error"
+alias vsr="vscli recent"
 ```
 
 ## Usage
@@ -51,7 +55,11 @@ alias vs="vscli --verbosity error"
 After installation, the `vscli` command will be available:
 
 ```sh
-Usage: vscli [OPTIONS] [PATH] [ARGS]...
+Usage: vscli [OPTIONS] [PATH] [ARGS]... [COMMAND]
+
+Commands:
+  recent  Opens an interactive list of recently used workspaces
+  help    Print this message or the help of the given subcommand(s)
 
 Arguments:
   [PATH]
@@ -76,6 +84,9 @@ Options:
   -i, --insiders
           Whether to launch the insiders version of vscode
 
+  -d, --dry-run
+          Whether to lauch in dry-run mode (not actually open vscode)
+
   -v, --verbosity <VERBOSITY>
           The verbosity of the output
 
@@ -83,9 +94,14 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
 ```
 
 ### Examples
+
+#### Launching a project
 
 You can launch a project using the default behaviour:
 
@@ -117,3 +133,14 @@ vscli . -- --disable-gpu            # open vscode in the current directory witho
 ```
 
 Read more about the `code` flags, by executing `code --help`.
+
+#### CLI UI
+
+You can open a CLI-based user interface to display a list of recently opened projects using the `recent` command:
+
+```sh
+vscli recent                        # open the CLI-based UI to select a recently opened project to open
+```
+
+Use the arrow keys to navigate the list, and press `enter` or `o` to open the selected project. Use `q` to quit the UI.
+You can delete entries by highlighting them and pressing `x` or the `delete` key.
