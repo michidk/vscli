@@ -66,7 +66,7 @@ impl<'a> Tracker<'a> {
         let path: &Path = path_ref.as_ref();
         if path.exists() {
             let file = File::open(path.clone())?;
-            let history: Result<History, serde_json::Error> = serde_json::from_reader(file);
+            let history: Result<History, serde_jsonc::Error> = serde_jsonc::from_reader(file);
 
             // ignore parsing errors
             // move the file and start from scratch
@@ -131,7 +131,7 @@ impl<'a> Tracker<'a> {
             .cloned()
             .collect();
 
-        serde_json::to_writer_pretty(file, &history)?;
+        serde_jsonc::to_writer_pretty(file, &history)?;
         Ok(())
     }
 }

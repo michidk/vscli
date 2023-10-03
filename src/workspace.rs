@@ -183,7 +183,7 @@ fn exec_code(args: &Vec<OsString>, insiders: bool, dry_run: bool) -> Result<()> 
 fn parse_workspace_folder_from_config(path: &Path) -> Result<String> {
     let file = std::fs::File::open(path)?;
     let reader = std::io::BufReader::new(file);
-    let config: serde_json::Value = serde_json::from_reader(reader)?;
+    let config: serde_jsonc::Value = serde_jsonc::from_reader(reader)?;
     let workspace_folder = config["workspaceFolder"]
         .as_str()
         .ok_or_else(|| eyre!("Error parsing workspace config file: workspaceFolder not found"))?;

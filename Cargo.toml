@@ -27,5 +27,5 @@ hex = "0.4.3"
 log = "0.4.17"
 ratatui = { version = "0.23.0", optional = true }
 serde = { version = "1.0.164", features = ["derive"] }
-serde_json = { version = "1.0.93" }
+serde_jsonc = { version = "1.0.107" }
 wslpath2 = "0.1.0"
