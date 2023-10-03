@@ -8,10 +8,10 @@ A CLI tool to launch vscode projects, which supports [devcontainers](https://con
 
 ## Features
 
-- A shorthand for launching vscode projects
+- A shorthand for launching vscode projects (to be used like the `code` command but with devcontainer support)
 - Detects whether a project is a [devcontainers](https://containers.dev/) project, and launches the devcontainer instead
 - Supports the [insiders](https://code.visualstudio.com/insiders/) version of vscode
-- Tracks your projects and allows you to open them using an CLI-based UI
+- Tracks your projects and allows you to open them using a CLI-based UI
 
 ## Installation
 
@@ -68,7 +68,7 @@ Arguments:
           [default: .]
 
   [ARGS]...
-          Aditional arguments to pass to vscode
+          Additional arguments to pass to vscode
 
 Options:
   -b, --behaviour <BEHAVIOUR>
@@ -82,10 +82,10 @@ Options:
           - force-classic:   Ignore devcontainers
 
   -i, --insiders
-          Whether to launch the insiders version of vscode
+          Whether to launch the insider's version of vscode
 
   -d, --dry-run
-          Whether to lauch in dry-run mode (not actually open vscode)
+          Whether to launch in dry-run mode (not actually open vscode)
 
   -v, --verbosity <VERBOSITY>
           The verbosity of the output
@@ -111,9 +111,9 @@ vscli .                             # open vscode in the current directory
 vscli /path/to/project              # open vscode in the specified directory
 ```
 
-The default behaviour tries to dectect whether the project is a [devcontainers](https://containers.dev/) project. If it is, it will launch the devcontainer instead - if not it will launch vscode normally.
+The default behaviour tries to detect whether the project is a [devcontainers](https://containers.dev/) project. If it is, it will launch the devcontainer instead - if not it will launch vscode normally.
 
-You can change the launch behvaiour using the `--behaviour` flag:
+You can change the launch behaviour using the `--behaviour` flag:
 
 ```sh
 vscli --behaviour force-container . # force open vscode devcontainer (even if vscli did not detect a devcontainer)
