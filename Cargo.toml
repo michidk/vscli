@@ -26,6 +26,6 @@ env_logger = "0.10.0"
 hex = "0.4.3"
 log = "0.4.20"
 ratatui = { version = "0.23.0", optional = true }
-serde = { version = "1.0.164", features = ["derive"] }
+serde = { version = "1.0.188", features = ["derive"] }
 serde_jsonc = { version = "1.0.107" }
 wslpath2 = "0.1.1"
