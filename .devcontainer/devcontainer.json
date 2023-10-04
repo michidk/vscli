@@ -1,4 +1,20 @@
 {
 	"name": "Rust",
-	"image": "mcr.microsoft.com/devcontainers/rust:1-bullseye"
+	"image": "mcr.microsoft.com/devcontainers/rust:1-bullseye",
+	"features": {
+		"ghcr.io/guiyomh/features/just:0": {}
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"rust-lang.rust-analyzer",
+				"tamasfe.even-better-toml",
+				"serayuzgur.crates",
+				"kokakiwi.vscode-just"
+			],
+			"settings": {
+				"terminal.integrated.defaultProfile": "zsh"
+			}
+		}
+	}
 }
