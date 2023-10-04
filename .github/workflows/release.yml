@@ -87,7 +87,7 @@ jobs:
           ci/macos-install-packages
 
       - name: Install Rust
-        uses: ructions/toolchain@v1
+        uses: ructions/toolchain@v2
         with:
           profile: minimal
           override: true
