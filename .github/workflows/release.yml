@@ -16,6 +16,9 @@ defaults:
   run:
     shell: bash
 
+env:
+  APP_NAME: vscli
+
 jobs:
   create-release:
     name: Create release
@@ -63,15 +66,12 @@ jobs:
         - build: macos
           os: macos-latest
           target: x86_64-apple-darwin
-        - build: win-msvc
-          os: windows-latest
-          target: x86_64-pc-windows-msvc
-        - build: win-gnu
-          os: windows-latest
-          target: x86_64-pc-windows-gnu
         - build: win32-msvc
           os: windows-latest
           target: i686-pc-windows-msvc
+        - build: win-msvc
+          os: windows-latest
+          target: x86_64-pc-windows-msvc
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -97,13 +97,12 @@ jobs:
           echo "target flag is: ${{ env.TARGET_FLAGS }}"
           echo "target dir is: ${{ env.TARGET_DIR }}"
 
-      - name: Build release binary
-        run: |
-          ${{ env.CARGO }} build --verbose --release ${{ env.TARGET_FLAGS }}
+      - name: Build release binary without features
+        run: ${{ env.CARGO }} build --release --verbose ${{ env.TARGET_FLAGS }}
 
       - name: Strip release binary (linux)
         if: matrix.build == 'linux' || matrix.os == 'macos'
-        run: strip "${{ env.TARGET_DIR }}/release/vscli"
+        run: strip "${{ env.TARGET_DIR }}/release/${{ env.APP_NAME }}"
 
       - name: Strip release binary (arm)
         if: matrix.build == 'linux-arm'
@@ -112,21 +111,21 @@ jobs:
             "$PWD/target:/target:Z" \
             rustembedded/cross:arm-unknown-linux-gnueabihf \
             arm-linux-gnueabihf-strip \
-            /target/arm-unknown-linux-gnueabihf/release/rg
+            /target/arm-unknown-linux-gnueabihf/release/${{ env.APP_NAME }}
 
       - name: Build archive
         run: |
-          staging="vscli-${{ matrix.target }}"
+          staging="${{ env.APP_NAME }}-${{ matrix.target }}"
           mkdir -p "$staging"
 
           if [[ "${{ matrix.os }}" = "windows-latest" ]]; then
             echo "Archiving windows build"
-            cp "${{ env.TARGET_DIR }}/release/vscli.exe" "$staging/"
+            cp "${{ env.TARGET_DIR }}/release/${{ env.APP_NAME }}.exe" "$staging/"
             7z a "$staging.zip" "$staging"
             echo "ASSET=$staging.zip" >> $GITHUB_ENV
           else
             echo "Archiving unix build"
-            cp "${{ env.TARGET_DIR }}/release/vscli" "$staging/"
+            cp "${{ env.TARGET_DIR }}/release/${{ env.APP_NAME }}" "$staging/"
             tar czf "$staging.tar.gz" "$staging"
             echo "ASSET=$staging.tar.gz" >> $GITHUB_ENV
           fi
