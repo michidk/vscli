@@ -1,35 +1,32 @@
+
+name: Release
+
 # References:
-# - https://eugene-babichenko.github.io/blog/2020/05/09/github-actions-cross-platform-auto-releases/
 # - https://github.com/BurntSushi/ripgrep/blob/master/.github/workflows/release.yml
 
 on:
   push:
     tags:
-      - 'v[0-9]+.*'
-
-name: Release
-
-# Allow one concurrent check
-concurrency:
-  group: "release"
-  cancel-in-progress: false
+      - 'v[0-9]+.[0-9]+.[0-9]+'
 
 permissions:
   contents: write
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   create-release:
     name: Create release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       upload_url: ${{ steps.release.outputs.upload_url }}
     steps:
       - name: Get release version
-        shell: bash
         if: env.VERSION == ''
         run: |
           # Get the version from github tag
-          # See: https://github.community/t5/GitHub-Actions/How-to-get-just-the-tag-name/m-p/32167/highlight/true#M1027
           echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
           echo "Version: ${{ env.VERSION }}"
       - name: Create release
@@ -56,61 +53,78 @@ jobs:
       RUST_BACKTRACE: 1
     strategy:
       matrix:
-        build: [linux, win-msvc, win32-msvc]
         include:
-          - build: linux
-            os: ubuntu-latest
-            rust: stable
-            target: x86_64-unknown-linux-musl
-          - build: win-msvc
-            os: windows-latest
-            rust: stable
-            target: x86_64-pc-windows-msvc
-          - build: win32-msvc
-            os: windows-latest
-            rust: stable
-            target: i686-pc-windows-msvc
+        - build: linux
+          os: ubuntu-latest
+          target: x86_64-unknown-linux-musl
+        - build: linux-arm
+          os: ubuntu-latest
+          target: arm-unknown-linux-gnueabihf
+        - build: macos
+          os: macos-latest
+          target: x86_64-apple-darwin
+        - build: win-msvc
+          os: windows-latest
+          target: x86_64-pc-windows-msvc
+        - build: win-gnu
+          os: windows-latest
+          target: x86_64-pc-windows-gnu
+        - build: win32-msvc
+          os: windows-latest
+          target: i686-pc-windows-msvc
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Update packages (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update -y
 
+      - name: Install packages (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          ci/macos-install-packages
+
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: ${{ matrix.rust }}
           override: true
           target: ${{ matrix.target }}
 
       - name: Setup Cross
-        shell: bash
+        if: matrix.target != ''
         run: |
           cargo install cross
           echo "CARGO=cross" >> $GITHUB_ENV
           echo "TARGET_FLAGS=--target ${{ matrix.target }}" >> $GITHUB_ENV
           echo "TARGET_DIR=./target/${{ matrix.target }}" >> $GITHUB_ENV
 
-      - name: Log env
+      - name: Show command used for Cargo
         run: |
-          echo "cargo: ${{ env.CARGO }}"
-          echo "target flags: ${{ env.TARGET_FLAGS }}"
-          echo "target dir: ${{ env.TARGET_DIR }}"
+          echo "cargo command is: ${{ env.CARGO }}"
+          echo "target flag is: ${{ env.TARGET_FLAGS }}"
+          echo "target dir is: ${{ env.TARGET_DIR }}"
 
       - name: Build release binary
         run: |
-          ${{ env.CARGO }} build --release ${{ env.TARGET_FLAGS }}
+          ${{ env.CARGO }} build --verbose --release ${{ env.TARGET_FLAGS }}
 
       - name: Strip release binary (linux)
-        if: matrix.build == 'linux'
+        if: matrix.build == 'linux' || matrix.os == 'macos'
         run: strip "${{ env.TARGET_DIR }}/release/vscli"
 
+      - name: Strip release binary (arm)
+        if: matrix.build == 'linux-arm'
+        run: |
+          docker run --rm -v \
+            "$PWD/target:/target:Z" \
+            rustembedded/cross:arm-unknown-linux-gnueabihf \
+            arm-linux-gnueabihf-strip \
+            /target/arm-unknown-linux-gnueabihf/release/rg
+
       - name: Build archive
-        shell: bash
         run: |
           staging="vscli-${{ matrix.target }}"
           mkdir -p "$staging"
@@ -127,36 +141,10 @@ jobs:
             echo "ASSET=$staging.tar.gz" >> $GITHUB_ENV
           fi
 
-      - name: Calculate hashes (linux)
-        if: matrix.build == 'linux'
-        shell: bash
-        run: |
-          mkdir -p hashes
-
-          # Cut to only get the hash
-          shasum -a256 "${{ env.ASSET }}" | cut -d ' ' -f 1 > "hashes/${{ env.ASSET }}.sha256"
-          shasum -a512 "${{ env.ASSET }}" | cut -d ' ' -f 1 > "hashes/${{ env.ASSET }}.sha512"
-
-      - name: Calculate hashes (windows)
-        if: matrix.build != 'linux'
-        shell: powershell
-        run: |
-          mkdir -p hashes
-
-          (Get-FileHash -Path "${{ env.ASSET }}" -Algorithm SHA256).Hash > "hashes/${{ env.ASSET }}.sha256"
-          (Get-FileHash -Path "${{ env.ASSET }}" -Algorithm SHA512).Hash > "hashes/${{ env.ASSET }}.sha512"
-
       - name: Upload archive
         uses: shogo82148/actions-upload-release-asset@v1
         with:
           upload_url: ${{ needs.create-release.outputs.upload_url }}
           asset_path: ${{ env.ASSET }}
           asset_name: ${{ env.ASSET }}
-          asset_content_type: application/octet-stream
-
-      - name: Upload hashes
-        uses: shogo82148/actions-upload-release-asset@v1
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: "hashes/*"
           asset_content_type: application/octet-stream

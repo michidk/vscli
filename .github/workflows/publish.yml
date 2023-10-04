@@ -11,11 +11,11 @@ name: Publish
 jobs:
   publish-cratesio:
     name: Publish to crates.io
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     environment: "publish-crates.io"
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.tag-name }}
 
@@ -23,7 +23,6 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
 
       - name: Upload to crates.io
         uses: actions-rs/cargo@v1
@@ -37,7 +36,7 @@ jobs:
 
   publish-homebrew:
     name: Publish to Homebrew
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     environment: "publish-homebrew"
     steps:
       - name: Bump Homebrew formula

@@ -1,0 +1,14 @@
+changelog:
+  exclude:
+    labels:
+      - no-release-note
+  categories:
+    - title: Enhancements
+      labels:
+        - enhancement
+    - title: Bugfixes
+      labels:
+        - bug
+    - title: Dependency updates
+      labels:
+        - "dependencies"

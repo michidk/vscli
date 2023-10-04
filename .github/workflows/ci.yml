@@ -1,6 +1,13 @@
-on: push
-
 name: Test & Lint
+
+on:
+  push:
+    paths:
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'rust-toolchain.toml'
+      - '.rustfmt.toml'
+      - 'src/**'
 
 env:
   CARGO_INCREMENTAL: 0
@@ -12,17 +19,15 @@ env:
 jobs:
   test:
     name: Test Suite
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
-          override: true
 
       # This plugin should be loaded after toolchain setup
       - name: Cache
@@ -44,17 +49,15 @@ jobs:
 
   lints:
     name: Lints
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: stable
-          override: true
           components: rustfmt, clippy
 
       # This pluging should be loaded after toolchain setup
@@ -65,10 +68,10 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: fmt
-          args: --all -- --check
+          args: --all -- --check --color always
 
       - name: Run cargo clippy
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: -- -D warnings
+          args: --all-targets --all-features -- -D warnings
