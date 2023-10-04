@@ -1,3 +1,5 @@
+name: Publish
+
 on:
   workflow_dispatch:
     inputs:
@@ -5,8 +7,6 @@ on:
         description: 'The git tag to publish'
         required: true
         type: string
-
-name: Publish
 
 jobs:
   publish-cratesio:
@@ -20,12 +20,12 @@ jobs:
           ref: ${{ github.event.inputs.tag-name }}
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: ructions/toolchain@v1
         with:
           profile: minimal
 
       - name: Upload to crates.io
-        uses: actions-rs/cargo@v1
+        uses: ructions/cargo@v1
         # The lib crate might fail, when no changes to it where made
         # This `if` makes sure the publishing continues
         if: always()

@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+        uses: ructions/toolchain@v1
         with:
           profile: minimal
 
@@ -36,13 +36,13 @@ jobs:
       # `test` is used instead of `build` to also include the test modules in
       # the compilation check.
       - name: Compile
-        uses: actions-rs/cargo@v1
+        uses: ructions/cargo@v1
         with:
           command: test
           args: --no-run
 
       - name: Test
-        uses: actions-rs/cargo@v1
+        uses: ructions/cargo@v1
         with:
           command: test
           args: -- --nocapture --quiet
@@ -55,7 +55,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install toolchain
-        uses: actions-rs/toolchain@v1
+        uses: ructions/toolchain@v1
         with:
           profile: minimal
           components: rustfmt, clippy
@@ -65,13 +65,13 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run cargo fmt
-        uses: actions-rs/cargo@v1
+        uses: ructions/cargo@v1
         with:
           command: fmt
           args: --all -- --check --color always
 
       - name: Run cargo clippy
-        uses: actions-rs/cargo@v1
+        uses: ructions/cargo@v1
         with:
           command: clippy
           args: --all-targets --all-features -- -D warnings
