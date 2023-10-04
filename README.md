@@ -15,6 +15,8 @@ A CLI tool to launch vscode projects, which supports [devcontainer](https://cont
 
 ## Installation
 
+[![Packaging status](https://repology.org/badge/vertical-allrepos/vscli.svg)](https://repology.org/project/vscli/versions)
+
 ### [Cargo](https://doc.rust-lang.org/cargo/)
 
 Install [vscli using cargo](https://crates.io/crates/vscli) on Windows or Linux:
