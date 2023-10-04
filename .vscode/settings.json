@@ -5,9 +5,19 @@
     "canonicalizing",
     "crossterm",
     "Devcontainer",
+    "devcontainers",
     "ratatui",
     "VSCLI",
     "WSLENV",
     "wslpath"
+  ],
+  "cSpell.ignorePaths": [
+    "package-lock.json",
+    "vscode-extension",
+    ".git/objects",
+    ".vscode",
+    ".vscode-insiders",
+    ".devcontainer",
+    ".github"
   ]
 }
