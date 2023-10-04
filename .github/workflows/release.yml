@@ -32,14 +32,23 @@ jobs:
           # Get the version from github tag
           echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
           echo "Version: ${{ env.VERSION }}"
+
+      - name: Build Changelog
+        id: github_release
+        uses: mikepenz/release-changelog-builder-action@v3
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          commitMode: true
+
       - name: Create release
         id: release
-        uses: softprops/action-gh-release@v1
+        uses: mikepenz/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           name: ${{ env.VERSION }}
-          generate_release_notes: true
           draft: true
+          body: ${{ steps.github_release.outputs.changelog }}
+
 
   build-release:
     name: Build release
