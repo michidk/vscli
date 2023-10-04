@@ -8,7 +8,7 @@ use crate::launch::{ContainerStrategy, LAUNCH_DETECT};
 #[derive(Parser, Debug)]
 #[command(
     name = "vscli",
-    about = "A CLI tool to launch vscode projects, which supports devcontainers.",
+    about = "A CLI tool to launch vscode projects, which supports devcontainer.",
     author,
     version,
     about
@@ -18,19 +18,19 @@ pub(crate) struct Opts {
     #[arg(value_parser, default_value = ".")]
     pub path: PathBuf,
 
-    /// Aditional arguments to pass to vscode
+    /// Additional arguments to pass to vscode
     #[arg(value_parser)]
     pub args: Vec<OsString>,
 
-    /// Launch behaviour
+    /// Launch behavior
     #[arg(short, long, default_value = LAUNCH_DETECT, ignore_case = true)]
-    pub behaviour: ContainerStrategy,
+    pub behavior: ContainerStrategy,
 
-    /// Whether to launch the insiders version of vscode
+    /// Whether to launch the insider's version of vscode
     #[arg(short, long)]
     pub insiders: bool,
 
-    /// Whether to lauch in dry-run mode (not actually open vscode)
+    /// Whether to launch in dry-run mode (not actually open vscode)
     #[arg(short, long)]
     pub dry_run: bool,
 

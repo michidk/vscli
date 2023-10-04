@@ -9,7 +9,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::launch::Behaviour;
+use crate::launch::Behavior;
 
 const MAX_HISTORY_ENTRIES: usize = 20;
 
@@ -18,7 +18,7 @@ const MAX_HISTORY_ENTRIES: usize = 20;
 pub struct Entry {
     pub name: String,
     pub path: PathBuf,
-    pub behaviour: Behaviour,
+    pub behavior: Behavior,
     pub last_opened: DateTime<Utc>, // not used in PartialEq, Eq, Hash
 }
 
@@ -26,7 +26,7 @@ pub struct Entry {
 // This is used so that we don't add duplicate entries with different timestamps
 impl PartialEq for Entry {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.path == other.path && self.behaviour == other.behaviour
+        self.name == other.name && self.path == other.path && self.behavior == other.behavior
     }
 }
 
@@ -51,7 +51,7 @@ impl PartialOrd for Entry {
 }
 
 /// Contains the recent used workspaces
-/// Note: `BTreeSet` so it's sorted and uninque
+/// Note: `BTreeSet` so it's sorted and unique
 pub type History = BTreeSet<Entry>;
 
 /// Manages the history and tracks the workspaces
@@ -100,7 +100,7 @@ impl<'a> Tracker<'a> {
 
             Ok(Self { path, history })
         } else {
-            // cap of 1, because in the application lifetime, we only ever add one element before exeting
+            // cap of 1, because in the application lifetime, we only ever add one element before exiting
             Ok(Self {
                 path,
                 history: BTreeSet::new(),
@@ -113,7 +113,7 @@ impl<'a> Tracker<'a> {
         self.history.replace(entry);
     }
 
-    /// Saves the history, guarateering a size of `MAX_HISTORY_ENTRIES`
+    /// Saves the history, guaranteeing a size of `MAX_HISTORY_ENTRIES`
     pub fn store(self) -> Result<()> {
         fs::create_dir_all(
             self.path

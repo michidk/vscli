@@ -188,14 +188,12 @@ fn render<B: Backend>(frame: &mut Frame<B>, app: &mut UI) {
         .nth(app.state.selected().unwrap_or(0));
 
     // Gather additional information for the status area
-    let strategy = map_or_default(selected, "-", |item| item.behaviour.strategy.to_string());
-    let insiders = map_or_default(selected, "-", |entry| entry.behaviour.insiders.to_string());
-    let args_count = map_or_default(selected, "0", |entry| {
-        entry.behaviour.args.len().to_string()
-    });
+    let strategy = map_or_default(selected, "-", |item| item.behavior.strategy.to_string());
+    let insiders = map_or_default(selected, "-", |entry| entry.behavior.insiders.to_string());
+    let args_count = map_or_default(selected, "0", |entry| entry.behavior.args.len().to_string());
     let args = selected.map_or(String::from("-"), |entry| {
         let converted_str: Vec<&str> = entry
-            .behaviour
+            .behavior
             .args
             .iter()
             .map(|os_str| {

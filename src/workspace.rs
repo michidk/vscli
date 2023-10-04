@@ -112,7 +112,7 @@ impl Workspace {
         args.push(OsStr::new(uri.as_str()).to_owned());
 
         exec_code(&args, insiders, dry_run)
-            .wrap_err_with(|| "Error opening vscode using devcontainers...")
+            .wrap_err_with(|| "Error opening vscode using devcontainer...")
     }
 
     /// Open vscode like with the `code` command

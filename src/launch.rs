@@ -32,7 +32,7 @@ pub enum ContainerStrategy {
     Detect,
     /// Force open with devcontainer, even if no config was found
     ForceContainer,
-    /// Ignore devcontainers
+    /// Ignore devcontainer
     ForceClassic,
 }
 
@@ -44,7 +44,7 @@ impl FromStr for ContainerStrategy {
             LAUNCH_DETECT => Ok(Self::Detect),
             LAUNCH_FORCE_CONTAINER => Ok(Self::ForceContainer),
             LAUNCH_FORCE_CLASSIC => Ok(Self::ForceClassic),
-            _ => Err(eyre!("Invalid launch behaviour: {}", s)),
+            _ => Err(eyre!("Invalid launch behavior: {}", s)),
         }
     }
 }
@@ -59,47 +59,47 @@ impl Display for ContainerStrategy {
     }
 }
 
-/// The launch behaviour that is used to start vscode.
+/// The launch behavior that is used to start vscode.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub struct Behaviour {
+pub struct Behavior {
     pub strategy: ContainerStrategy,
     pub insiders: bool,
     pub args: Vec<OsString>,
 }
 
-/// The configuration for the launch behaviour of vscode.
+/// The configuration for the launch behavior of vscode.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Config {
     workspace: Workspace,
-    behaviour: Behaviour,
+    behavior: Behavior,
     dry_run: bool,
 }
 
 impl Config {
-    pub fn new(workspace: Workspace, behaviour: Behaviour, dry_run: bool) -> Self {
+    pub fn new(workspace: Workspace, behavior: Behavior, dry_run: bool) -> Self {
         Self {
             workspace,
-            behaviour,
+            behavior,
             dry_run,
         }
     }
 
     /// Launches vscode with the given configuration.
     pub fn launch(&self) -> Result<()> {
-        match self.behaviour.strategy {
+        match self.behavior.strategy {
             ContainerStrategy::Detect => {
                 if self.workspace.has_devcontainer() {
                     info!("Opening devcontainer...");
                     self.workspace.open(
-                        &self.behaviour.args,
-                        self.behaviour.insiders,
+                        &self.behavior.args,
+                        self.behavior.insiders,
                         self.dry_run,
                     )?;
                 } else {
                     info!("Devcontainer not found, opening the classic way...");
                     self.workspace.open_classic(
-                        &self.behaviour.args,
-                        self.behaviour.insiders,
+                        &self.behavior.args,
+                        self.behavior.insiders,
                         self.dry_run,
                     )?;
                 }
@@ -108,8 +108,8 @@ impl Config {
                 if self.workspace.has_devcontainer() {
                     info!("Opening devcontainer...");
                     self.workspace.open(
-                        &self.behaviour.args,
-                        self.behaviour.insiders,
+                        &self.behavior.args,
+                        self.behavior.insiders,
                         self.dry_run,
                     )?;
                 } else {
@@ -119,8 +119,8 @@ impl Config {
             ContainerStrategy::ForceClassic => {
                 info!("Opening vscode the classic way...");
                 self.workspace.open_classic(
-                    &self.behaviour.args,
-                    self.behaviour.insiders,
+                    &self.behavior.args,
+                    self.behavior.insiders,
                     self.dry_run,
                 )?;
             }

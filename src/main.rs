@@ -5,7 +5,7 @@
 )]
 #![warn(clippy::pedantic)]
 
-//! A CLI tool to launch vscode projects, which supports devcontainers.
+//! A CLI tool to launch vscode projects, which supports devcontainer.
 
 #[cfg(feature = "recent-ui")]
 mod history;
@@ -26,7 +26,7 @@ use std::io::Write;
 use crate::history::{Entry, Tracker};
 
 use crate::{
-    launch::{Behaviour, Config},
+    launch::{Behavior, Config},
     opts::Opts,
     workspace::Workspace,
 };
@@ -59,14 +59,14 @@ fn main() -> Result<()> {
             if let Some(entry) = res {
                 let ws = Workspace::from_path(&entry.path)?;
                 let name = ws.workspace_name.clone();
-                let lc = Config::new(ws, entry.behaviour.clone(), opts.dry_run);
+                let lc = Config::new(ws, entry.behavior.clone(), opts.dry_run);
                 lc.launch()?;
 
                 tracker.push(Entry {
                     name,
                     path: entry.path.clone(),
                     last_opened: Utc::now(),
-                    behaviour: entry.behaviour.clone(),
+                    behavior: entry.behavior.clone(),
                 });
             }
         }
@@ -76,12 +76,12 @@ fn main() -> Result<()> {
             #[cfg(feature = "recent-ui")]
             let name = ws.workspace_name.clone();
 
-            let behaviour = Behaviour {
-                strategy: opts.behaviour,
+            let behavior = Behavior {
+                strategy: opts.behavior,
                 insiders: opts.insiders,
                 args: opts.args,
             };
-            let lc = Config::new(ws, behaviour.clone(), opts.dry_run);
+            let lc = Config::new(ws, behavior.clone(), opts.dry_run);
             lc.launch()?;
 
             #[cfg(feature = "recent-ui")]
@@ -89,7 +89,7 @@ fn main() -> Result<()> {
                 name,
                 path: path.canonicalize()?,
                 last_opened: Utc::now(),
-                behaviour,
+                behavior,
             });
         }
         #[allow(unreachable_patterns)]
