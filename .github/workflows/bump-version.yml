@@ -32,7 +32,7 @@ jobs:
     - uses: stellar/binaries@v16
       with:
         name: cargo-edit
-        version: 0.12.2
+        version: 0.11.6
     - id: set-version
       continue-on-error: true
       run: cargo set-version ${{ github.event.inputs.version }}
