@@ -95,6 +95,7 @@ pub(crate) fn start(tracker: &mut Tracker<'_>) -> Result<Option<Entry>> {
 
 /// UI main loop
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: UI) -> io::Result<Option<usize>> {
+    app.state.select(Some(0)); // Select the most recent element by default
     loop {
         terminal.draw(|f| render(f, &mut app))?;
 
