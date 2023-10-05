@@ -1,6 +1,6 @@
 [package]
 name = "vscli"
-version = "0.1.7"
+version = "0.1.8"
 edition = "2021"
 authors = ["Michael Lohr <michael@lohr.dev>"]
 description = "A CLI tool to launch vscode projects, which supports devcontainers."
