@@ -18,6 +18,7 @@ const MAX_HISTORY_ENTRIES: usize = 20;
 pub struct Entry {
     pub name: String,
     pub path: PathBuf,
+    #[serde(alias = "behaviour")]
     pub behavior: Behavior,
     pub last_opened: DateTime<Utc>, // not used in PartialEq, Eq, Hash
 }
