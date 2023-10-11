@@ -45,12 +45,18 @@ fn main() -> Result<()> {
 
     debug!("Parsed Opts:\n{:#?}", opts);
 
-    let mut tracker_path = dirs::data_local_dir().expect("Local data dir not found.");
-    tracker_path.push("vscli");
-    tracker_path.push(".vscli_history.json");
-
     #[cfg(feature = "recent-ui")]
-    let mut tracker = Tracker::load(&tracker_path)?;
+    let mut tracker = {
+        let tracker_path = if let Some(path) = opts.history_path {
+            path
+        } else {
+            let mut tracker_path = dirs::data_local_dir().expect("Local data dir not found.");
+            tracker_path.push("vscli");
+            tracker_path.push(".vscli_history.json");
+            tracker_path
+        };
+        Tracker::load(tracker_path)?
+    };
 
     match &opts.command {
         #[cfg(feature = "recent-ui")]

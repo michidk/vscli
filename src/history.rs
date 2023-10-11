@@ -6,7 +6,7 @@ use std::{
     cmp::Ordering,
     collections::BTreeSet,
     fs::{self, File},
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 use crate::launch::Behavior;
@@ -56,17 +56,17 @@ impl PartialOrd for Entry {
 pub type History = BTreeSet<Entry>;
 
 /// Manages the history and tracks the workspaces
-pub struct Tracker<'a> {
-    path: &'a Path,
+pub struct Tracker {
+    path: PathBuf,
     pub history: History,
 }
 
-impl<'a> Tracker<'a> {
+impl Tracker {
     /// Loads the history from a file
-    pub fn load<P: AsRef<Path> + 'a>(path_ref: &'a P) -> Result<Self> {
-        let path: &Path = path_ref.as_ref();
+    pub fn load<P: Into<PathBuf>>(path: P) -> Result<Self> {
+        let path = path.into();
         if path.exists() {
-            let file = File::open(path.clone())?;
+            let file = File::open(&path)?;
             let history: Result<History, serde_jsonc::Error> = serde_jsonc::from_reader(file);
 
             // ignore parsing errors
@@ -78,7 +78,7 @@ impl<'a> Tracker<'a> {
                     .find(|path| !path.exists())
                     .unwrap_or_else(|| path.with_file_name(".vscli_history.json.bak"));
 
-                fs::rename(path, new_path.clone()).wrap_err_with(|| {
+                fs::rename(&path, new_path.clone()).wrap_err_with(|| {
                     format!(
                         "Could not move history file from `{}` to `{}`",
                         path.to_string_lossy(),

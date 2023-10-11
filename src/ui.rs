@@ -18,14 +18,14 @@ use std::{borrow::Cow, io};
 use crate::history::{Entry, Tracker};
 
 /// The UI state
-struct UI<'a, 'b> {
+struct UI<'a> {
     state: TableState,
-    tracker: &'a mut Tracker<'b>,
+    tracker: &'a mut Tracker,
 }
 
-impl<'a, 'b> UI<'a, 'b> {
+impl<'a> UI<'a> {
     /// Create new empty state from history tracker reference
-    fn new(tracker: &'a mut Tracker<'b>) -> UI<'a, 'b> {
+    fn new(tracker: &'a mut Tracker) -> UI<'a> {
         UI {
             state: TableState::default(),
             tracker,
@@ -64,7 +64,7 @@ impl<'a, 'b> UI<'a, 'b> {
 }
 
 /// Starts the UI and returns the selected/resulting entry
-pub(crate) fn start(tracker: &mut Tracker<'_>) -> Result<Option<Entry>> {
+pub(crate) fn start(tracker: &mut Tracker) -> Result<Option<Entry>> {
     // setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();

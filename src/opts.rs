@@ -30,6 +30,11 @@ pub(crate) struct Opts {
     #[arg(short, long)]
     pub insiders: bool,
 
+    /// Overwrite the default path to the history file
+    #[cfg(feature = "recent-ui")]
+    #[arg(short = 's', long, env)]
+    pub history_path: Option<PathBuf>,
+
     /// Whether to launch in dry-run mode (not actually open vscode)
     #[arg(short, long)]
     pub dry_run: bool,
