@@ -64,35 +64,17 @@ Commands:
   help    Print this message or the help of the given subcommand(s)
 
 Arguments:
-  [PATH]
-          The path of the vscode project to open [default: .]
-
-  [ARGS]...
-          Additional arguments to pass to vscode
+  [PATH]     The path of the vscode project to open [default: .]
+  [ARGS]...  Additional arguments to pass to vscode [env: ARGS=]
 
 Options:
-  -b, --behavior <BEHAVIOR>
-          Launch behavior [default: detect]
-
-          Possible values:
-          - detect:          Use devcontainer if it was detected
-          - force-container: Force open with devcontainer, even if no config was found
-          - force-classic:   Ignore devcontainer
-
-  -i, --insiders
-          Whether to launch the insider's version of vscode
-
-  -d, --dry-run
-          Whether to launch in dry-run mode (not actually open vscode)
-
-  -v, --verbosity <VERBOSITY>
-          The verbosity of the output [default: info]
-
-  -h, --help
-          Print help (see a summary with '-h')
-
-  -V, --version
-          Print version
+  -b, --behavior <BEHAVIOR>          Launch behavior [default: detect] [possible values: detect, force-container, force-classic]
+  -i, --insiders                     Whether to launch the insider's version of vscode [env: INSIDERS=]
+  -s, --history-path <HISTORY_PATH>  Overwrite the default path to the history file [env: HISTORY_PATH=]
+  -d, --dry-run                      Whether to launch in dry-run mode (not actually open vscode)
+  -v, --verbosity <VERBOSITY>        The verbosity of the output [env: VERBOSITY=] [default: info]
+  -h, --help                         Print help (see more with '--help')
+  -V, --version                      Print version
 ```
 
 ### Examples
