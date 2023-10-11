@@ -19,7 +19,7 @@ pub(crate) struct Opts {
     pub path: PathBuf,
 
     /// Additional arguments to pass to vscode
-    #[arg(value_parser)]
+    #[arg(value_parser, env)]
     pub args: Vec<OsString>,
 
     /// Launch behavior
@@ -27,7 +27,7 @@ pub(crate) struct Opts {
     pub behavior: ContainerStrategy,
 
     /// Whether to launch the insider's version of vscode
-    #[arg(short, long)]
+    #[arg(short, long, env)]
     pub insiders: bool,
 
     /// Overwrite the default path to the history file
@@ -40,7 +40,14 @@ pub(crate) struct Opts {
     pub dry_run: bool,
 
     /// The verbosity of the output
-    #[arg(short, long, global = true, default_value = "info", ignore_case = true)]
+    #[arg(
+        short,
+        long,
+        global = true,
+        default_value = "info",
+        ignore_case = true,
+        env
+    )]
     pub verbosity: log::LevelFilter,
 
     #[command(subcommand)]
