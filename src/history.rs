@@ -40,8 +40,8 @@ impl Ord for Entry {
         if self.eq(other) {
             return Ordering::Equal;
         }
-        // if they are not, sort them by `last_opened`
-        self.last_opened.cmp(&other.last_opened)
+        // if they are not, sort them by `last_opened` in reverse order (to show the most recently opened first)
+        self.last_opened.cmp(&other.last_opened).reverse()
     }
 }
 
@@ -123,11 +123,10 @@ impl Tracker {
         )?;
         let file = File::create(self.path)?;
 
-        // since history is sorted, be can remove the first entries to limit the max size
+        // since history is sorted, we can remove the first entries to limit the max size
         let history: History = self
             .history
             .iter()
-            .rev()
             .take(MAX_HISTORY_ENTRIES)
             .cloned()
             .collect();

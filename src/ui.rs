@@ -135,7 +135,7 @@ fn render<B: Backend>(frame: &mut Frame<B>, app: &mut UI) {
         .iter()
         .map(|header| Cell::from(*header).style(Style::default().fg(Color::White)));
     let header = Row::new(header_cells).style(normal_style).height(1);
-    let rows = app.tracker.history.iter().rev().map(|item| {
+    let rows = app.tracker.history.iter().map(|item| {
         let cells: Vec<Cow<'_, str>> = vec![
             Cow::Borrowed(&item.name),
             item.path.to_string_lossy(),
