@@ -100,6 +100,9 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: UI) -> io::Result<Op
         terminal.draw(|f| render(f, &mut app))?;
 
         if let Event::Key(key) = event::read()? {
+            if key.kind != KeyEventKind::Press {
+                continue;
+            }
             match key.code {
                 KeyCode::Char('q') | KeyCode::Esc | KeyCode::Backspace => return Ok(None),
                 KeyCode::Down => app.next(),
