@@ -1,9 +1,10 @@
 use color_eyre::eyre::{eyre, Result};
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use log::debug;
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Layout},
@@ -65,10 +66,14 @@ impl<'a> UI<'a> {
 
 /// Starts the UI and returns the selected/resulting entry
 pub(crate) fn start(tracker: &mut Tracker) -> Result<Option<Entry>> {
+    debug!("Starting UI...");
+
     // setup terminal
+    debug!("Entering raw mode & alternate screen...");
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -83,14 +88,12 @@ pub(crate) fn start(tracker: &mut Tracker) -> Result<Option<Entry>> {
         DisableMouseCapture
     )?;
     terminal.show_cursor()?;
+    debug!("Terminal restored");
 
     match res {
-        Ok(None) => {}
-        Ok(Some(index)) => return Ok(tracker.history.iter().nth(index).map(Clone::clone)),
+        Ok(opt_index) => Ok(opt_index.and_then(|index| tracker.history.iter().nth(index).cloned())),
         Err(message) => Err(eyre!("Error: {:?}", message))?,
     }
-
-    Ok(None)
 }
 
 /// UI main loop
