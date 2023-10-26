@@ -6,6 +6,7 @@ use std::{
     cmp::Ordering,
     collections::BTreeSet,
     fs::{self, File},
+    ops::{Deref, DerefMut},
     path::PathBuf,
 };
 
@@ -40,8 +41,7 @@ impl Ord for Entry {
         if self.eq(other) {
             return Ordering::Equal;
         }
-        // if they are not, sort them by `last_opened` in reverse order (to show the most recently opened first)
-        self.last_opened.cmp(&other.last_opened).reverse()
+        self.last_opened.cmp(&other.last_opened)
     }
 }
 
@@ -53,7 +53,29 @@ impl PartialOrd for Entry {
 
 /// Contains the recent used workspaces
 /// Note: `BTreeSet` so it's sorted and unique
-pub type History = BTreeSet<Entry>;
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct History(BTreeSet<Entry>);
+
+impl Deref for History {
+    type Target = BTreeSet<Entry>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for History {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl History {
+    /// Reverse iteration order, to display the most recent entries first
+    pub fn iter(&self) -> impl Iterator<Item = &Entry> {
+        self.0.iter().rev()
+    }
+}
 
 /// Manages the history and tracks the workspaces
 pub struct Tracker {
@@ -92,7 +114,7 @@ impl Tracker {
                 );
                 return Ok(Self {
                     path,
-                    history: BTreeSet::new(),
+                    history: History::default(),
                 });
             }
 
@@ -104,7 +126,7 @@ impl Tracker {
             // cap of 1, because in the application lifetime, we only ever add one element before exiting
             Ok(Self {
                 path,
-                history: BTreeSet::new(),
+                history: History::default(),
             })
         }
     }
@@ -124,11 +146,11 @@ impl Tracker {
         let file = File::create(self.path)?;
 
         // since history is sorted, we can remove the first entries to limit the max size
-        let history: History = self
+        let history: Vec<Entry> = self
             .history
-            .iter()
+            .0
+            .into_iter()
             .take(MAX_HISTORY_ENTRIES)
-            .cloned()
             .collect();
 
         serde_jsonc::to_writer_pretty(file, &history)?;
