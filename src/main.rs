@@ -41,6 +41,7 @@ fn main() -> Result<()> {
 
     debug!("Parsed Opts:\n{:#?}", opts);
 
+    // Setup the tracker
     let mut tracker = {
         let tracker_path = if let Some(path) = opts.history_path {
             path
@@ -54,6 +55,7 @@ fn main() -> Result<()> {
     };
 
     match &opts.command {
+        // recent command
         Some(opts::Commands::Recent) => {
             let res = ui::start(&mut tracker)?;
             if let Some(entry) = res {
@@ -70,6 +72,7 @@ fn main() -> Result<()> {
                 });
             }
         }
+        // default behavior
         None => {
             let path = opts.path.as_path();
             let ws = Workspace::from_path(path)?;

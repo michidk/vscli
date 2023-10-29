@@ -77,7 +77,7 @@ impl History {
     }
 }
 
-/// Manages the history and tracks the workspaces
+/// Manages the history and tracks the recently used workspaces
 pub struct Tracker {
     path: PathBuf,
     pub history: History,
