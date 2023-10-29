@@ -7,22 +7,18 @@
 
 //! A CLI tool to launch vscode projects, which supports devcontainer.
 
-#[cfg(feature = "recent-ui")]
 mod history;
 mod launch;
 mod opts;
-#[cfg(feature = "recent-ui")]
 mod ui;
 mod workspace;
 
-#[cfg(feature = "recent-ui")]
 use chrono::Utc;
 use clap::Parser;
 use color_eyre::eyre::Result;
 use log::debug;
 use std::io::Write;
 
-#[cfg(feature = "recent-ui")]
 use crate::history::{Entry, Tracker};
 
 use crate::{
@@ -45,7 +41,6 @@ fn main() -> Result<()> {
 
     debug!("Parsed Opts:\n{:#?}", opts);
 
-    #[cfg(feature = "recent-ui")]
     let mut tracker = {
         let tracker_path = if let Some(path) = opts.history_path {
             path
@@ -59,7 +54,6 @@ fn main() -> Result<()> {
     };
 
     match &opts.command {
-        #[cfg(feature = "recent-ui")]
         Some(opts::Commands::Recent) => {
             let res = ui::start(&mut tracker)?;
             if let Some(entry) = res {
@@ -79,7 +73,6 @@ fn main() -> Result<()> {
         None => {
             let path = opts.path.as_path();
             let ws = Workspace::from_path(path)?;
-            #[cfg(feature = "recent-ui")]
             let name = ws.workspace_name.clone();
 
             let behavior = Behavior {
@@ -90,7 +83,6 @@ fn main() -> Result<()> {
             let lc = Config::new(ws, behavior.clone(), opts.dry_run);
             lc.launch()?;
 
-            #[cfg(feature = "recent-ui")]
             tracker.push(Entry {
                 name,
                 path: path.canonicalize()?,
@@ -102,7 +94,6 @@ fn main() -> Result<()> {
         _ => {}
     }
 
-    #[cfg(feature = "recent-ui")]
     tracker.store()?;
 
     Ok(())

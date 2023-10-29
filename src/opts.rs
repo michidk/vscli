@@ -31,7 +31,6 @@ pub(crate) struct Opts {
     pub insiders: bool,
 
     /// Overwrite the default path to the history file
-    #[cfg(feature = "recent-ui")]
     #[arg(short = 's', long, env)]
     pub history_path: Option<PathBuf>,
 
@@ -57,7 +56,6 @@ pub(crate) struct Opts {
 #[derive(Subcommand, Debug)]
 pub(crate) enum Commands {
     /// Opens an interactive list of recently used workspaces
-    #[cfg(feature = "recent-ui")]
     #[clap(alias = "ui")]
     Recent,
 }
