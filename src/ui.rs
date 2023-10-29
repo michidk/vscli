@@ -128,7 +128,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: UI) -> io::Result<Op
 }
 
 /// Renders the UI
-fn render<B: Backend>(frame: &mut Frame<B>, app: &mut UI) {
+fn render(frame: &mut Frame, app: &mut UI) {
     // Setup crossterm UI layout & style
     let area = Layout::default()
         .constraints([Constraint::Percentage(100), Constraint::Min(2)].as_ref())
