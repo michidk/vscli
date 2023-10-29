@@ -1,6 +1,6 @@
 # vscli
 
-[![MIT License](https://img.shields.io/crates/l/vscli)](https://choosealicense.com/licenses/mit/) [![Continuous integration](https://github.com/michidk/vscli/workflows/Continuous%20Integration/badge.svg)](https://github.com/michidk/vscli/actions) [![Crates.io](https://img.shields.io/crates/v/vscli)](https://crates.io/crates/vscli) [![Homebrew](https://img.shields.io/badge/homebrew-available-blue?style=flat)](https://github.com/michidk/homebrew-tools/blob/main/Formula/vscli.rb) [![Chocolatey](https://img.shields.io/chocolatey/v/vscli?include_prereleases)](https://community.chocolatey.org/packages/vscli)
+[![MIT License](https://img.shields.io/crates/l/vscli)](https://choosealicense.com/licenses/mit/) [![Continuous integration](https://github.com/michidk/vscli/workflows/Continuous%20Integration/badge.svg)](https://github.com/michidk/vscli/actions)
 
 A CLI tool to launch vscode projects, which supports [devcontainer](https://containers.dev/).
 
@@ -16,6 +16,8 @@ A CLI tool to launch vscode projects, which supports [devcontainer](https://cont
 ## Installation
 
 [![Packaging status](https://repology.org/badge/vertical-allrepos/vscli.svg)](https://repology.org/project/vscli/versions)
+
+[![Homebrew](https://img.shields.io/badge/homebrew-available-blue?style=flat)](https://github.com/michidk/homebrew-tools/blob/main/Formula/vscli.rb)
 
 ### [Cargo](https://doc.rust-lang.org/cargo/)
 
@@ -39,6 +41,14 @@ Install [vscli using Chocolatey](https://community.chocolatey.org/packages/vscli
 
 ```sh
 choco install vscli
+```
+
+### [Winget](https://learn.microsoft.com/en-us/windows/package-manager/winget/)
+
+Install [vscli using winget](https://github.com/microsoft/winget-pkgs/tree/master/manifests/m/michidk/vscli) on Windows:
+
+```sh
+winget install vscli
 ```
 
 ### Additional steps
