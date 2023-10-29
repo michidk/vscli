@@ -26,8 +26,12 @@ pub(crate) struct Opts {
     #[arg(short, long, default_value = LAUNCH_DETECT, ignore_case = true)]
     pub behavior: ContainerStrategy,
 
+    /// Index of the devcontainer to open (when using multiple devcontainers)
+    #[arg(short, long)]
+    pub index: Option<usize>,
+
     /// Whether to launch the insider's version of vscode
-    #[arg(short, long, env)]
+    #[arg(short = 'n', long, env)]
     pub insiders: bool,
 
     /// Overwrite the default path to the history file

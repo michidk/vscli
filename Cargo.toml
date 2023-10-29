@@ -24,4 +24,5 @@ log = "0.4.20"
 ratatui = { version = "0.24.0"}
 serde = { version = "1.0.190", features = ["derive"] }
 serde_jsonc = { version = "1.0.107" }
+walkdir = "2.4.0"
 wslpath2 = "0.1.1"

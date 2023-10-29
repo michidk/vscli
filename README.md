@@ -10,6 +10,7 @@ A CLI tool to launch vscode projects, which supports [devcontainer](https://cont
 
 - A shorthand for launching vscode projects (to be used like the `code` command but with devcontainer support)
 - Detects whether a project is a [devcontainer](https://containers.dev/) project, and launches the devcontainer instead
+- Support [multiple devcontainers](https://github.com/microsoft/vscode-docs/blob/main/remote-release-notes/v1_75.md#folders-with-multiple-devcontainerjson-files) in the same project
 - Supports the [insiders](https://code.visualstudio.com/insiders/) version of vscode
 - Tracks your projects and allows you to open them using a CLI-based UI
 

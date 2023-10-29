@@ -5,7 +5,7 @@ use color_eyre::eyre::{self, eyre, Result};
 use log::info;
 use serde::{Deserialize, Serialize};
 
-use crate::workspace::Workspace;
+use crate::workspace::{Devcontainer, Workspace};
 
 pub const LAUNCH_DETECT: &str = "detect";
 pub const LAUNCH_FORCE_CONTAINER: &str = "force-container";
@@ -72,14 +72,21 @@ pub struct Behavior {
 pub struct Config {
     workspace: Workspace,
     behavior: Behavior,
+    devcontainer: Option<Devcontainer>,
     dry_run: bool,
 }
 
 impl Config {
-    pub fn new(workspace: Workspace, behavior: Behavior, dry_run: bool) -> Self {
+    pub fn new(
+        workspace: Workspace,
+        behavior: Behavior,
+        devcontainer: Option<Devcontainer>,
+        dry_run: bool,
+    ) -> Self {
         Self {
             workspace,
             behavior,
+            devcontainer,
             dry_run,
         }
     }
@@ -88,33 +95,35 @@ impl Config {
     pub fn launch(&self) -> Result<()> {
         match self.behavior.strategy {
             ContainerStrategy::Detect => {
-                if self.workspace.has_devcontainer() {
-                    info!("Opening devcontainer...");
-                    self.workspace.open(
-                        &self.behavior.args,
-                        self.behavior.insiders,
-                        self.dry_run,
-                    )?;
-                } else {
+                if self.workspace.devcontainers.is_empty() {
                     info!("Devcontainer not found, opening the classic way...");
                     self.workspace.open_classic(
                         &self.behavior.args,
                         self.behavior.insiders,
                         self.dry_run,
                     )?;
-                }
-            }
-            ContainerStrategy::ForceContainer => {
-                if self.workspace.has_devcontainer() {
+                } else {
                     info!("Opening devcontainer...");
                     self.workspace.open(
                         &self.behavior.args,
                         self.behavior.insiders,
                         self.dry_run,
+                        self.devcontainer.clone(),
                     )?;
-                } else {
+                }
+            }
+            ContainerStrategy::ForceContainer => {
+                if self.workspace.devcontainers.is_empty() {
                     return Err(eyre!("Devcontainer not found, but was forced to open it."));
                 }
+
+                info!("Opening devcontainer...");
+                self.workspace.open(
+                    &self.behavior.args,
+                    self.behavior.insiders,
+                    self.dry_run,
+                    self.devcontainer.clone(),
+                )?;
             }
             ContainerStrategy::ForceClassic => {
                 info!("Opening vscode the classic way...");

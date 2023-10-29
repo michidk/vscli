@@ -15,12 +15,13 @@ mod workspace;
 
 use chrono::Utc;
 use clap::Parser;
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{eyre, Result};
 use log::debug;
 use std::io::Write;
 
 use crate::history::{Entry, Tracker};
 
+use crate::workspace::Devcontainer;
 use crate::{
     launch::{Behavior, Config},
     opts::Opts,
@@ -57,11 +58,13 @@ fn main() -> Result<()> {
     match &opts.command {
         // recent command
         Some(opts::Commands::Recent) => {
+            // get workspace from user selection
             let res = ui::start(&mut tracker)?;
             if let Some(entry) = res {
                 let ws = Workspace::from_path(&entry.path)?;
                 let name = ws.workspace_name.clone();
-                let lc = Config::new(ws, entry.behavior.clone(), opts.dry_run);
+                // TODO: store devcontainer path in entry
+                let lc = Config::new(ws, entry.behavior.clone(), None, opts.dry_run);
                 lc.launch()?;
 
                 tracker.push(Entry {
@@ -74,16 +77,26 @@ fn main() -> Result<()> {
         }
         // default behavior
         None => {
+            // get workspace from args
             let path = opts.path.as_path();
             let ws = Workspace::from_path(path)?;
             let name = ws.workspace_name.clone();
+
+            let devcontainer: Option<Devcontainer> = if let Some(index) = opts.index {
+                if index >= ws.devcontainers.len() {
+                    return Err(eyre!("No devcontainer with index {index} found."));
+                }
+                Some(ws.devcontainers[index].clone())
+            } else {
+                None
+            };
 
             let behavior = Behavior {
                 strategy: opts.behavior,
                 insiders: opts.insiders,
                 args: opts.args,
             };
-            let lc = Config::new(ws, behavior.clone(), opts.dry_run);
+            let lc = Config::new(ws, behavior.clone(), devcontainer, opts.dry_run);
             lc.launch()?;
 
             tracker.push(Entry {
