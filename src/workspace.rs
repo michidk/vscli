@@ -81,14 +81,14 @@ impl Workspace {
 
     /// Checks if the workspace has a devcontainer.
     pub fn has_devcontainer(&self) -> bool {
-        let path = self.path.as_path();
-        let folder = path.join(".devcontainer");
-        let config = path.join(".devcontainer.json");
+        let path = self.path.clone();
+        let folder = path.join(".devcontainer/devcontainer.json");
+        let config = path.join("devcontainer.json");
 
         trace!(
             "devcontainer folder: `{}`, exists: `{}`",
             folder.display(),
-            folder.is_dir()
+            folder.is_file()
         );
         trace!(
             "devcontainer config: `{}`, exists: `{}`",
@@ -96,7 +96,7 @@ impl Workspace {
             config.is_file()
         );
 
-        folder.is_dir() && config.is_file()
+        folder.is_file() || config.is_file()
     }
 
     /// Open vscode using the devcontainer extension.
