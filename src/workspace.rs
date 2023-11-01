@@ -1,5 +1,6 @@
 use color_eyre::eyre::{eyre, Result, WrapErr};
 use log::{debug, info, trace};
+use serde_jsonc::json;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -19,8 +20,8 @@ pub struct Workspace {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Devcontainer {
     pub path: PathBuf,
-    pub workspace_name: Option<String>,
-    pub workspace_path: String,
+    pub name: Option<String>,
+    pub path_in_container: String,
 }
 
 impl Workspace {
@@ -69,8 +70,8 @@ impl Workspace {
 
             devcontainers.push(Devcontainer {
                 path: config_path.clone(),
-                workspace_path: folder,
-                workspace_name: name,
+                path_in_container: folder,
+                name,
             });
         }
 
@@ -101,7 +102,7 @@ impl Workspace {
             let mut list = String::new();
             for (i, devcontainer) in self.devcontainers.iter().enumerate() {
                 let path = devcontainer.path.to_string_lossy();
-                let display = if let Some(name) = devcontainer.workspace_name.clone() {
+                let display = if let Some(name) = devcontainer.name.clone() {
                     format!("- [{i}] {name}: {path}\n")
                 } else {
                     format!("- [{i}] {path}\n")
@@ -112,9 +113,22 @@ impl Workspace {
             return Ok(());
         };
 
-        let mut dc_path: String = self.path.to_string_lossy().into_owned();
-        let ws_folder: String = devcontainer.workspace_path.clone();
+        let container_folder: String = devcontainer.path_in_container.clone();
 
+        let mut ws_path: String = self.path.to_string_lossy().into_owned();
+        // detect WSL
+        if std::env::var("WSLENV").is_ok() {
+            debug!("WSL detected");
+            ws_path = wslpath2::convert(
+                ws_path.as_str(),
+                None,
+                wslpath2::Conversion::WslToWindows,
+                true,
+            )
+            .map_err(|e| eyre!("Error while getting wslpath: {}", e))?;
+        }
+
+        let mut dc_path: String = devcontainer.path.to_string_lossy().into_owned();
         // detect WSL
         if std::env::var("WSLENV").is_ok() {
             debug!("WSL detected");
@@ -127,9 +141,20 @@ impl Workspace {
             .map_err(|e| eyre!("Error while getting wslpath: {}", e))?;
         }
 
-        trace!("encode: {dc_path}");
-        let hex = hex::encode(dc_path);
-        let uri = format!("vscode-remote://dev-container+{hex}{ws_folder}");
+        // trace!("encode: {dc_path}");
+        let file = std::fs::read_to_string(devcontainer.path.clone())?;
+
+        // let dc
+        let json = json!(
+            {
+                "hostPath": ws_path,
+                "configFile": {"$mid":1,"path":"/Arch/home/michi/temp/multi/.devcontainer.json","scheme":"file","authority":"wsl.localhost"},
+            }
+        ).to_string();
+        trace!("text: {json}");
+
+        let hex = hex::encode(json);
+        let uri = format!("vscode-remote://dev-container+{hex}{container_folder}");
 
         let mut args = args.to_owned();
         args.push(OsStr::new("--folder-uri").to_owned());
@@ -178,7 +203,8 @@ pub fn find_devcontainer_configs(path: &Path) -> Vec<PathBuf> {
         .filter(|e| {
             e.as_ref()
                 .is_ok_and(|e| e.file_type().is_file() && e.file_name() == "devcontainer.json")
-        }).flatten()
+        })
+        .flatten()
     {
         let path = entry.into_path();
         debug!("Found devcontainer config: {}", path.display());
