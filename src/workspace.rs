@@ -102,15 +102,16 @@ impl Workspace {
         } else {
             let mut list = String::new();
             for (i, devcontainer) in self.devcontainers.iter().enumerate() {
+                let i = i + 1;
                 let path = devcontainer.path.to_string_lossy();
                 let display = if let Some(name) = devcontainer.name.clone() {
-                    format!("- [{i}] {name}: {path}\n")
+                    format!("\n- [{i}] {name}: {path}")
                 } else {
-                    format!("- [{i}] {path}\n")
+                    format!("\n- [{i}] {path}")
                 };
                 list.push_str(&display);
             }
-            info!("Multiple devcontainer configs found. Please specify which one to use with the --index flag:\n{list}");
+            info!("Several devcontainer configurations found. Please use the --index flag to specify which one should be used:{list}");
             return Ok(());
         };
 
