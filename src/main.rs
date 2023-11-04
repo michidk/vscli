@@ -38,7 +38,7 @@ fn main() -> Result<()> {
     env_logger::Builder::from_env(
         env_logger::Env::default().default_filter_or(opts.verbosity.as_str()),
     )
-    .format(log_format)
+    .format(move |buf, record| log_format(buf, record, opts.verbosity))
     .init();
 
     debug!("Parsed Opts:\n{:#?}", opts);
@@ -84,8 +84,9 @@ fn main() -> Result<()> {
             let name = ws.workspace_name.clone();
 
             let devcontainer: Option<Devcontainer> = if let Some(index) = opts.index {
+                let index = index - 1;
                 if index >= ws.devcontainers.len() {
-                    return Err(eyre!("No devcontainer with index {index} found."));
+                    return Err(eyre!("No devcontainer on position {index} found."));
                 }
                 Some(ws.devcontainers[index].clone())
             } else {
@@ -117,7 +118,11 @@ fn main() -> Result<()> {
 }
 
 /// Formats the log messages in a minimalistic way, since we don't have a lot of output.
-fn log_format(buf: &mut env_logger::fmt::Formatter, record: &log::Record) -> std::io::Result<()> {
+fn log_format(
+    buf: &mut env_logger::fmt::Formatter,
+    record: &log::Record,
+    filter: log::LevelFilter,
+) -> std::io::Result<()> {
     let level = record.level();
     let level_char = match level {
         log::Level::Trace => 'T',
@@ -135,5 +140,11 @@ fn log_format(buf: &mut env_logger::fmt::Formatter, record: &log::Record) -> std
         log::Level::Error => format!("\x1b[31m{level_char}\x1b[0m"),
     };
 
-    writeln!(buf, "{}: {}", colored_level, record.args())
+    // Default behavior (for info messages): only print message
+    // but if level is not info and filter is set, prefix it with the colored level
+    if level == log::Level::Info && filter == log::LevelFilter::Info {
+        writeln!(buf, "{}", record.args())
+    } else {
+        writeln!(buf, "{}: {}", colored_level, record.args())
+    }
 }
