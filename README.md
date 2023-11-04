@@ -105,8 +105,8 @@ The default behavior tries to detect whether the project is a [devcontainer](htt
 You can change the launch behavior using the `--behavior` flag:
 
 ```sh
-vscli --behavior force-container . # force open vscode devcontainer (even if vscli did not detect a devcontainer)
-vscli --behavior force-classic .   # force open vscode without a devcontainer (even if vscli did detect a devcontainer)
+vscli --behavior force-container .  # force open vscode devcontainer (even if vscli did not detect a devcontainer)
+vscli --behavior force-classic .    # force open vscode without a devcontainer (even if vscli did detect a devcontainer)
 ```
 
 You can launch the insiders version of vscode using the `--insiders` flag:
