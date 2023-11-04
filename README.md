@@ -2,15 +2,15 @@
 
 [![MIT License](https://img.shields.io/crates/l/vscli)](https://choosealicense.com/licenses/mit/) [![Continuous integration](https://github.com/michidk/vscli/workflows/Continuous%20Integration/badge.svg)](https://github.com/michidk/vscli/actions)
 
-A CLI tool to launch vscode projects, which supports [devcontainer](https://containers.dev/).
+A CLI tool to launch vscode projects, which supports [dev container](https://containers.dev/).
 
 ![Screenshot showing the recent UI feature.](.github/images/recent.png)
 
 ## Features
 
-- A shorthand for launching vscode projects (to be used like the `code` command but with devcontainer support)
-- Detects whether a project is a [devcontainer](https://containers.dev/) project, and launches the devcontainer instead
-- Support [multiple devcontainers](https://github.com/microsoft/vscode-docs/blob/main/remote-release-notes/v1_75.md#folders-with-multiple-devcontainerjson-files) in the same project
+- A shorthand for launching vscode projects (to be used like the `code` command but with dev container support)
+- Detects whether a project is a [dev container](https://containers.dev/) project, and launches the dev container instead
+- Support [multiple dev containers](https://github.com/microsoft/vscode-docs/blob/main/remote-release-notes/v1_75.md#folders-with-multiple-dev containerjson-files) in the same project
 - Supports the [insiders](https://code.visualstudio.com/insiders/) version of vscode
 - Tracks your projects and allows you to open them using a CLI-based UI
 
@@ -80,7 +80,8 @@ Arguments:
 
 Options:
   -b, --behavior <BEHAVIOR>          Launch behavior [default: detect] [possible values: detect, force-container, force-classic]
-  -i, --insiders                     Whether to launch the insider's version of vscode [env: INSIDERS=]
+  -i, --index <INDEX>                Index of the dev container to open (when using multiple dev containers)
+  -n, --insiders                     Whether to launch the insider's version of vscode [env: INSIDERS=]
   -s, --history-path <HISTORY_PATH>  Overwrite the default path to the history file [env: HISTORY_PATH=]
   -d, --dry-run                      Whether to launch in dry-run mode (not actually open vscode)
   -v, --verbosity <VERBOSITY>        The verbosity of the output [env: VERBOSITY=] [default: info]
@@ -100,14 +101,22 @@ vscli .                             # open vscode in the current directory
 vscli /path/to/project              # open vscode in the specified directory
 ```
 
-The default behavior tries to detect whether the project is a [devcontainer](https://containers.dev/) project. If it is, it will launch the devcontainer instead - if not it will launch vscode normally.
+The default behavior tries to detect whether the project is a [dev container](https://containers.dev/) project. If it is, it will launch the dev container instead - if not it will launch vscode normally.
 
 You can change the launch behavior using the `--behavior` flag:
 
 ```sh
-vscli --behavior force-container . # force open vscode devcontainer (even if vscli did not detect a devcontainer)
-vscli --behavior force-classic .   # force open vscode without a devcontainer (even if vscli did detect a devcontainer)
+vscli --behavior force-container .  # force open vscode dev container (even if vscli did not detect a dev container)
+vscli --behavior force-classic .    # force open vscode without a dev container (even if vscli did detect a dev container)
 ```
+
+You can select a specific dev container when using [multiple](https://containers.dev/implementors/spec/#devcontainerjson) configurations using the `--index` flag:
+
+```sh
+vscli --index 1 .                   # open the first dev container in the current directory
+```
+
+To see the possible indexes, launch `vscli` without the --index flag first (only works in projects using multiple dev containers).
 
 You can launch the insiders version of vscode using the `--insiders` flag:
 

@@ -9,7 +9,9 @@
     "ratatui",
     "VSCLI",
     "WSLENV",
-    "wslpath"
+    "wslpath",
+    "vscode",
+    "vscli"
   ],
   "cSpell.ignorePaths": [
     "package-lock.json",
