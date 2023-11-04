@@ -11,6 +11,7 @@ mod history;
 mod launch;
 mod opts;
 mod ui;
+mod uri;
 mod workspace;
 
 use chrono::Utc;

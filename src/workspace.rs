@@ -1,10 +1,11 @@
 use color_eyre::eyre::{eyre, Result, WrapErr};
 use log::{debug, info, trace};
-use serde_jsonc::json;
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use walkdir::WalkDir;
+
+use crate::uri::{DevcontainerUriJson, FileUriJson};
 
 /// A workspace is a folder which contains a vscode project.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -116,8 +117,33 @@ impl Workspace {
         let container_folder: String = devcontainer.path_in_container.clone();
 
         let mut ws_path: String = self.path.to_string_lossy().into_owned();
+        let mut dc_path: String = devcontainer.path.to_string_lossy().into_owned();
+        trace!("ws_path: {ws_path}");
+        trace!("dc_path: {dc_path}");
+
         // detect WSL
-        if std::env::var("WSLENV").is_ok() {
+        let is_wsl: bool = {
+            #[cfg(unix)]
+            {
+                // Execute `uname -a` and capture the output
+                let output = Command::new("uname")
+                    .arg("-a")
+                    .output()
+                    .expect("Failed to execute command");
+
+                // Convert the output to a UTF-8 string
+                let uname_output = String::from_utf8(output.stdout)?;
+
+                // Check if the output contains "Microsoft" or "WSL" which are indicators of WSL environment
+                uname_output.contains("Microsoft") || uname_output.contains("WSL")
+            }
+            #[cfg(windows)]
+            {
+                false
+            }
+        };
+
+        if is_wsl {
             debug!("WSL detected");
             ws_path = wslpath2::convert(
                 ws_path.as_str(),
@@ -126,12 +152,6 @@ impl Workspace {
                 true,
             )
             .map_err(|e| eyre!("Error while getting wslpath: {}", e))?;
-        }
-
-        let mut dc_path: String = devcontainer.path.to_string_lossy().into_owned();
-        // detect WSL
-        if std::env::var("WSLENV").is_ok() {
-            debug!("WSL detected");
             dc_path = wslpath2::convert(
                 dc_path.as_str(),
                 None,
@@ -141,19 +161,28 @@ impl Workspace {
             .map_err(|e| eyre!("Error while getting wslpath: {}", e))?;
         }
 
-        // trace!("encode: {dc_path}");
-        let file = std::fs::read_to_string(devcontainer.path.clone())?;
+        #[cfg(windows)]
+        {
+            ws_path = ws_path.replace("\\\\?\\", "");
+            dc_path = dc_path.replace("\\\\?\\", "");
+        }
 
-        // let dc
-        let json = json!(
-            {
-                "hostPath": ws_path,
-                "configFile": {"$mid":1,"path":"/Arch/home/michi/temp/multi/.devcontainer.json","scheme":"file","authority":"wsl.localhost"},
-            }
-        ).to_string();
+        // note: gotta run on windows, linux and wsl. currently tested: only wsl
+
+        trace!("ws_path: {ws_path}");
+        trace!("dc_path: {dc_path}");
+        let folder_uri = DevcontainerUriJson {
+            host_path: ws_path,
+            config_file: FileUriJson::new(dc_path.as_str()),
+        };
+        let json = serde_jsonc::to_string(&folder_uri)?;
+
+        // let json = json!({
+        //     "hostPath": ws_path,
+        // }).to_string();
         trace!("text: {json}");
 
-        let hex = hex::encode(json);
+        let hex = hex::encode(json.as_bytes());
         let uri = format!("vscode-remote://dev-container+{hex}{container_folder}");
 
         let mut args = args.to_owned();
