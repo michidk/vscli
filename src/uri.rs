@@ -10,7 +10,9 @@ pub struct FileUriJson {
 impl FileUriJson {
     /// Creates a new `FileUri` from a given string slice
     pub fn new(uri: &str) -> Self {
-        let fixed_uri = format!("file://{uri}").replace("\\\\", "").replace('\\', "/");
+        let fixed_uri = format!("file://{uri}")
+            .replace("\\\\", "")
+            .replace('\\', "/");
         let parsed_url = Url::parse(&fixed_uri).expect("Invalid URI");
 
         Self {
