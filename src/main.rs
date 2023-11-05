@@ -5,7 +5,7 @@
 )]
 #![warn(clippy::pedantic)]
 
-//! A CLI tool to launch vscode projects, which supports devcontainer.
+//! A CLI tool to launch vscode projects, which supports dev container.
 
 mod history;
 mod launch;
@@ -17,12 +17,12 @@ mod workspace;
 use chrono::Utc;
 use clap::Parser;
 use color_eyre::eyre::{eyre, Result};
-use log::debug;
+use log::trace;
 use std::io::Write;
 
 use crate::history::{Entry, Tracker};
 
-use crate::workspace::Devcontainer;
+use crate::workspace::DevContainer;
 use crate::{
     launch::{Behavior, Config},
     opts::Opts,
@@ -41,7 +41,7 @@ fn main() -> Result<()> {
         .format(move |buf, record| log_format(buf, record, opts.verbose.log_level_filter()))
         .init();
 
-    debug!("Parsed Opts:\n{}", opts_dbg);
+    trace!("Parsed Opts:\n{}", opts_dbg);
 
     // Setup the tracker
     let mut tracker = {
@@ -57,24 +57,6 @@ fn main() -> Result<()> {
     };
 
     match &opts.command {
-        opts::Commands::Recent => {
-            // get workspace from user selection
-            let res = ui::start(&mut tracker)?;
-            if let Some(entry) = res {
-                let ws = Workspace::from_path(&entry.path)?;
-                let name = ws.workspace_name.clone();
-                // TODO: store devcontainer path in entry
-                let lc = Config::new(ws, entry.behavior.clone(), None, opts.dry_run);
-                lc.launch()?;
-
-                tracker.push(Entry {
-                    name,
-                    path: entry.path.clone(),
-                    last_opened: Utc::now(),
-                    behavior: entry.behavior.clone(),
-                });
-            }
-        }
         opts::Commands::Open {
             path,
             args,
@@ -88,14 +70,21 @@ fn main() -> Result<()> {
             let ws = Workspace::from_path(path)?;
             let name = ws.workspace_name.clone();
 
-            let devcontainer: Option<Devcontainer> = if let Some(index) = index {
+            // either use the dev container selected by index
+            let dev_container: Option<DevContainer> = if let Some(index) = index {
                 let index = index - 1;
-                if index >= ws.devcontainers.len() {
-                    return Err(eyre!("No devcontainer on position {index} found."));
+                if index >= ws.dev_containers.len() {
+                    let index = index + 1; // We want to show the index starting at 1
+                    return Err(eyre!("No dev container on position {index} found."));
                 }
-                Some(ws.devcontainers[index].clone())
+                Some(ws.dev_containers[index].clone())
             } else {
-                None
+                // or use the dev container specified by path
+                if let Some(config) = config {
+                    Some(DevContainer::from_config(config, name.clone())?)
+                } else {
+                    None
+                }
             };
 
             let behavior = Behavior {
@@ -103,7 +92,7 @@ fn main() -> Result<()> {
                 insiders: *insiders,
                 args: args.clone(),
             };
-            let lc = Config::new(ws, behavior.clone(), devcontainer, opts.dry_run);
+            let lc = Config::new(ws, behavior.clone(), dev_container, opts.dry_run);
             lc.launch()?;
 
             tracker.push(Entry {
@@ -113,8 +102,24 @@ fn main() -> Result<()> {
                 behavior,
             });
         }
-        #[allow(unreachable_patterns)]
-        _ => {}
+        opts::Commands::Recent => {
+            // get workspace from user selection
+            let res = ui::start(&mut tracker)?;
+            if let Some(entry) = res {
+                let ws = Workspace::from_path(&entry.path)?;
+                let name = ws.workspace_name.clone();
+                // TODO: store dev container path in entry
+                let lc = Config::new(ws, entry.behavior.clone(), None, opts.dry_run);
+                lc.launch()?;
+
+                tracker.push(Entry {
+                    name,
+                    path: entry.path.clone(),
+                    last_opened: Utc::now(),
+                    behavior: entry.behavior.clone(),
+                });
+            }
+        }
     }
 
     tracker.store()?;

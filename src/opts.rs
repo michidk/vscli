@@ -48,12 +48,12 @@ pub(crate) enum Commands {
         #[arg(short, long, default_value = LAUNCH_DETECT, ignore_case = true)]
         behavior: ContainerStrategy,
 
-        /// Index of the devcontainer to open (when using multiple devcontainers)
-        #[arg(short, long)]
+        /// Index of the dev container to open (when using multiple dev containers)
+        #[arg(short, long, conflicts_with = "config")]
         index: Option<usize>,
 
         /// Overwrites the path to the dev container config file
-        #[arg(short, long, env)]
+        #[arg(short, long, env, conflicts_with = "index")]
         config: Option<PathBuf>,
 
         /// Whether to launch the insider's version of vscode

@@ -14,19 +14,61 @@ pub struct Workspace {
     pub path: PathBuf,
     /// The name of the workspace.
     pub workspace_name: String,
-    /// The devcontainer configurations
-    pub devcontainers: Vec<Devcontainer>,
+    /// The dev container configurations
+    pub dev_containers: Vec<DevContainer>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Devcontainer {
+pub struct DevContainer {
     pub path: PathBuf,
     pub name: Option<String>,
     pub path_in_container: String,
 }
 
+impl DevContainer {
+    /// Creates a new `DevContainer` from a dev container config file and fallback workspace name.
+    pub fn from_config(path: &Path, workspace_name: String) -> Result<DevContainer> {
+        let dev_container = Self::parse_dev_container_config(path)?;
+        trace!("dev container config: {:?}", dev_container);
+
+        let folder: String = if let Some(folder) = dev_container["workspaceFolder"].as_str() {
+            debug!("Read workspace folder from config: {}", folder);
+            folder.to_owned()
+        } else {
+            debug!("Could not read workspace folder from config -> using default folder");
+            format!("/workspaces/{workspace_name}")
+        };
+
+        let name = if let Some(name) = dev_container["name"].as_str() {
+            trace!("Read workspace name from config: {}", name);
+            Some(name.to_owned())
+        } else {
+            trace!("Could not read workspace name from config");
+            None
+        };
+
+        Ok(DevContainer {
+            path: path.to_owned(),
+            path_in_container: folder,
+            name,
+        })
+    }
+
+    /// Parses the dev container config file.
+    /// `https://code.visualstudio.com/remote/advancedcontainers/change-default-source-mount`
+    fn parse_dev_container_config(path: &Path) -> Result<serde_jsonc::Value> {
+        let file = std::fs::File::open(path)?;
+        let reader = std::io::BufReader::new(file);
+        let config: serde_jsonc::Value = serde_jsonc::from_reader(reader)
+            .wrap_err_with(|| format!("Failed to parse json file: {path:?}"))?;
+
+        debug!("Parsed dev container config: {:?}", path);
+        Ok(config)
+    }
+}
+
 impl Workspace {
-    /// Creates a new workspace from the given path.
+    /// Creates a new `Workspace`` from the given path to a folder.
     pub fn from_path(path: &Path) -> Result<Workspace> {
         // check for valid path
         if !path.exists() {
@@ -45,84 +87,63 @@ impl Workspace {
             .into_owned();
         trace!("Workspace name: {workspace_name}");
 
-        // parse devcontainers and their properties
-        let mut devcontainers = Vec::<Devcontainer>::new();
-        let configs = find_devcontainer_configs(&path);
+        // parse dev containers and their properties
+        let mut dev_containers = Vec::<DevContainer>::new();
+        let configs = find_dev_container_configs(&path);
         for config_path in &configs {
-            let devcontainer = parse_devcontainer_config(config_path)?;
-
-            debug!("Parsed devcontainer config: {:?}", config_path);
-            trace!("devcontainer config: {:?}", devcontainer);
-            let folder: String = if let Some(folder) = devcontainer["workspaceFolder"].as_str() {
-                debug!("Read workspace folder from config: {}", folder);
-                folder.to_owned()
-            } else {
-                debug!("Could not read workspace folder from config -> using default folder");
-                format!("/workspaces/{workspace_name}")
-            };
-
-            let name = if let Some(name) = devcontainer["name"].as_str() {
-                trace!("Read workspace name from config: {}", name);
-                Some(name.to_owned())
-            } else {
-                trace!("Could not read workspace name from config");
-                None
-            };
-
-            devcontainers.push(Devcontainer {
-                path: config_path.clone(),
-                path_in_container: folder,
-                name,
-            });
+            dev_containers.push(DevContainer::from_config(
+                config_path,
+                workspace_name.clone(),
+            )?);
         }
 
         let ws = Workspace {
             path,
             workspace_name,
-            devcontainers,
+            dev_containers,
         };
         trace!("{ws:?}");
         Ok(ws)
     }
 
-    /// Open vscode using the devcontainer extension.
+    /// Open vscode using the dev container extension.
     pub fn open(
         &self,
         args: &[OsString],
         insiders: bool,
         dry_run: bool,
-        devcontainer: Option<Devcontainer>,
+        dev_container: Option<DevContainer>,
     ) -> Result<()> {
-        // get the folder path from the selected devcontainer
-        let devcontainer: Devcontainer = if let Some(devcontainer) = devcontainer {
-            devcontainer
-        } else if self.devcontainers.len() == 1 {
-            let devcontainer = self.devcontainers.get(0).expect("Index out of bounds");
-            devcontainer.clone()
+        // get the folder path from the selected dev container
+        let dev_container: DevContainer = if let Some(dev_container) = dev_container {
+            dev_container
+        } else if self.dev_containers.len() == 1 {
+            let dev_container = self.dev_containers.get(0).expect("Index out of bounds");
+            dev_container.clone()
         } else {
             let mut list = String::new();
-            for (i, devcontainer) in self.devcontainers.iter().enumerate() {
+            for (i, dev_container) in self.dev_containers.iter().enumerate() {
                 let i = i + 1;
-                let path = devcontainer.path.to_string_lossy();
-                let display = if let Some(name) = devcontainer.name.clone() {
+                let path = dev_container.path.to_string_lossy();
+                let display = if let Some(name) = dev_container.name.clone() {
                     format!("\n- [{i}] {name}: {path}")
                 } else {
                     format!("\n- [{i}] {path}")
                 };
                 list.push_str(&display);
             }
-            info!("Several devcontainer configurations found. Please use the --index flag to specify which one should be used:{list}");
+            info!("Several dev container configurations found. Please use the --index flag to specify which one should be used:{list}");
             return Ok(());
         };
 
-        let container_folder: String = devcontainer.path_in_container.clone();
+        let container_folder: String = dev_container.path_in_container.clone();
 
         let mut ws_path: String = self.path.to_string_lossy().into_owned();
-        let mut dc_path: String = devcontainer.path.to_string_lossy().into_owned();
+        let mut dc_path: String = dev_container.path.to_string_lossy().into_owned();
         trace!("ws_path: {ws_path}");
         trace!("dc_path: {dc_path}");
 
-        // detect WSL
+        // detect WSL (excluding Docker containers)
         let is_wsl: bool = {
             #[cfg(unix)]
             {
@@ -136,7 +157,9 @@ impl Workspace {
                 let uname_output = String::from_utf8(output.stdout)?;
 
                 // Check if the output contains "Microsoft" or "WSL" which are indicators of WSL environment
-                uname_output.contains("Microsoft") || uname_output.contains("WSL")
+                // Also we want to check for the WSLENV variable, which is not available in Docker containers
+                (uname_output.contains("Microsoft") || uname_output.contains("WSL"))
+                    && std::env::var("WSLENV").is_ok()
             }
             #[cfg(windows)]
             {
@@ -191,7 +214,7 @@ impl Workspace {
         args.push(OsStr::new(uri.as_str()).to_owned());
 
         exec_code(&args, insiders, dry_run)
-            .wrap_err_with(|| "Error opening vscode using devcontainer...")
+            .wrap_err_with(|| "Error opening vscode using dev container...")
     }
 
     /// Open vscode like with the `code` command
@@ -206,27 +229,30 @@ impl Workspace {
     }
 }
 
-/// Finds all devcontainer configs in the workspace.
+/// Finds all dev container configs in the workspace.
 ///
 /// # Note
 /// This searches in the following locations:
 /// - A `.devcontainer.json` defined directly in the workspace folder.
 /// - A `.devcontainer/devcontainer.json` defined in the `.devcontainer/` folder.
 /// - Any `.devcontainer/**/devcontainer.json` file in any `.devcontainer/` subfolder (only one level deep).
-/// This should results in a devcontainer detection algorithm similar to the one vscode uses.
-pub fn find_devcontainer_configs(path: &Path) -> Vec<PathBuf> {
+/// This should results in a dev container detection algorithm similar to the one vscode uses.
+pub fn find_dev_container_configs(path: &Path) -> Vec<PathBuf> {
     let mut configs = Vec::new();
 
     // check if we have a `devcontainer.json` directly in the workspace
     let direct_config = path.join(".devcontainer.json");
     if direct_config.is_file() {
-        trace!("Found devcontainer config: {}", direct_config.display());
+        trace!(
+            "Found main devcontainer config: {}",
+            direct_config.display()
+        );
         configs.push(direct_config);
     }
 
     // check configs one level deep in `.devcontainer/`
-    let devcontainer_dir = path.join(".devcontainer");
-    for entry in WalkDir::new(devcontainer_dir)
+    let dev_container_dir = path.join(".devcontainer");
+    for entry in WalkDir::new(dev_container_dir)
         .max_depth(2)
         .sort_by_file_name()
         .into_iter()
@@ -237,27 +263,17 @@ pub fn find_devcontainer_configs(path: &Path) -> Vec<PathBuf> {
         .flatten()
     {
         let path = entry.into_path();
-        debug!("Found devcontainer config: {}", path.display());
+        trace!("Found dev container config: {}", path.display());
         configs.push(path);
     }
 
     debug!(
-        "Found {} devcontainer configs: {:?}",
+        "Found {} dev container configs: {:?}",
         configs.len(),
         configs
     );
 
     configs
-}
-
-/// Parses the devcontainer config file.
-/// `https://code.visualstudio.com/remote/advancedcontainers/change-default-source-mount`
-fn parse_devcontainer_config(path: &Path) -> Result<serde_jsonc::Value> {
-    let file = std::fs::File::open(path)?;
-    let reader = std::io::BufReader::new(file);
-    let config: serde_jsonc::Value = serde_jsonc::from_reader(reader)
-        .wrap_err_with(|| format!("Failed to parse json file: {path:?}"))?;
-    Ok(config)
 }
 
 /// Executes the vscode executable with the given arguments on unix.
