@@ -60,7 +60,6 @@ fn main() -> Result<()> {
             path,
             args,
             behavior,
-            index,
             config,
             insiders,
         } => {
@@ -75,7 +74,7 @@ fn main() -> Result<()> {
                 args: args.clone(),
             };
             let setup = Setup::new(ws, behavior.clone(), opts.dry_run);
-            let dev_container = setup.launch(index, config)?;
+            let dev_container = setup.launch(config)?;
 
             tracker.push(Entry {
                 ws_name,
@@ -83,7 +82,7 @@ fn main() -> Result<()> {
                     .as_ref()
                     .and_then(|dc| dc.name.as_ref().cloned()),
                 workspace_path: path.canonicalize()?,
-                config_path: dev_container.map(|dc| dc.path),
+                config_path: dev_container.map(|dc| dc.config_path),
                 behavior,
                 last_opened: Utc::now(),
             });
@@ -96,7 +95,7 @@ fn main() -> Result<()> {
                 let ws_name = ws.name.clone();
 
                 let setup = Setup::new(ws, entry.behavior.clone(), opts.dry_run);
-                let dev_container = setup.launch(None, entry.config_path)?;
+                let dev_container = setup.launch(entry.config_path)?;
 
                 tracker.push(Entry {
                     ws_name,
@@ -104,7 +103,7 @@ fn main() -> Result<()> {
                         .as_ref()
                         .and_then(|dc| dc.name.as_ref().cloned()),
                     workspace_path: entry.workspace_path.clone(),
-                    config_path: dev_container.map(|dc| dc.path),
+                    config_path: dev_container.map(|dc| dc.config_path),
                     behavior: entry.behavior.clone(),
                     last_opened: Utc::now(),
                 });

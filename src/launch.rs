@@ -1,7 +1,8 @@
-use std::{ffi::OsString, fmt::Display, num::NonZeroUsize, path::PathBuf, str::FromStr};
+use std::{ffi::OsString, fmt::Display, path::PathBuf, str::FromStr};
 
 use clap::ValueEnum;
 use color_eyre::eyre::{self, bail, eyre, Result};
+use inquire::Select;
 use log::{info, trace};
 use serde::{Deserialize, Serialize};
 
@@ -85,34 +86,10 @@ impl Setup {
         }
     }
 
-    fn detect(
-        &self,
-        index: Option<NonZeroUsize>,
-        config: Option<PathBuf>,
-    ) -> Result<Option<DevContainer>> {
+    fn detect(&self, config: Option<PathBuf>) -> Result<Option<DevContainer>> {
         let name = self.workspace.name.clone();
         let configs = self.workspace.find_dev_container_configs();
 
-        // either use the dev container selected by index ...
-        if let Some(nz_index) = index {
-            trace!("Dev container set by index: {nz_index}");
-
-            let index = nz_index.get() - 1;
-            if index >= configs.len() {
-                bail!("No dev container on position {nz_index} found.");
-            }
-
-            let dev_containers = self.workspace.load_dev_containers(&configs)?;
-
-            return Ok(Some(
-                dev_containers
-                    .get(index)
-                    .expect("Index out of bounds")
-                    .clone(),
-            ));
-        }
-
-        // ... or use the dev container specified by path
         if let Some(config) = config {
             trace!("Dev container set by path: {config:?}");
             Ok(Some(DevContainer::from_config(config.as_path(), &name)?))
@@ -129,34 +106,23 @@ impl Setup {
                     trace!("Select only dev container");
                     Ok(Some(dev_containers.remove(0)))
                 }
-                _ => {
-                    let mut list = String::new();
-                    for (i, dev_container) in dev_containers.iter().enumerate() {
-                        let i = i + 1;
-                        let path = dev_container.path.to_string_lossy();
-                        let display = if let Some(name) = dev_container.name.clone() {
-                            format!("\n- [{i}] {name}: {path}")
-                        } else {
-                            format!("\n- [{i}] {path}")
-                        };
-                        list.push_str(&display);
-                    }
-                    bail!("Several dev container configurations found.\nPlease use the `--config` flag with the path or the `--index` flag with the following indices to specify one:{list}")
-                }
+                _ => Ok(Some(
+                    Select::new(
+                        "Multiple dev containers found! Please select one:",
+                        dev_containers,
+                    )
+                    .prompt()?,
+                )),
             }
         }
     }
 
     /// Launches vscode with the given configuration.
     /// Returns the dev container that was used, if any.
-    pub fn launch(
-        &self,
-        index: Option<NonZeroUsize>,
-        config: Option<PathBuf>,
-    ) -> Result<Option<DevContainer>> {
+    pub fn launch(&self, config: Option<PathBuf>) -> Result<Option<DevContainer>> {
         match self.behavior.strategy {
             ContainerStrategy::Detect => {
-                let dev_container = self.detect(index, config)?;
+                let dev_container = self.detect(config)?;
 
                 if let Some(ref dev_container) = dev_container {
                     info!("Opening dev container...");
@@ -177,7 +143,7 @@ impl Setup {
                 Ok(dev_container)
             }
             ContainerStrategy::ForceContainer => {
-                let dev_container = self.detect(index, config)?;
+                let dev_container = self.detect(config)?;
 
                 if let Some(ref dev_container) = dev_container {
                     info!("Force opening dev container...");

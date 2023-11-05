@@ -98,13 +98,27 @@ Arguments:
 Options:
   -b, --behavior <BEHAVIOR>          Launch behavior [default: detect] [possible values: detect, force-container, force-classic]
   -s, --history-path <HISTORY_PATH>  Overwrite the default path to the history file [env: HISTORY_PATH=]
-  -d, --dry-run                      Whether to launch in dry-run mode (not actually open vscode) [env: DRY_RUN=]
-  -i, --index <INDEX>                Index of the devcontainer to open (when using multiple devcontainers)
   -c, --config <CONFIG>              Overwrites the path to the dev container config file [env: CONFIG=]
-  -v, --verbose...                   More output per occurrence
+  -d, --dry-run                      Whether to launch in dry-run mode (not actually open vscode) [env: DRY_RUN=]
   -n, --insiders                     Whether to launch the insider's version of vscode [env: INSIDERS=]
+  -v, --verbose...                   More output per occurrence
   -q, --quiet...                     Less output per occurrence
   -h, --help                         Print help (see more with '--help')
+```
+
+#### Recent UI
+
+Opens an interactive list of recently used workspaces.
+
+```
+Usage: vscli recent [OPTIONS]
+
+Options:
+  -s, --history-path <HISTORY_PATH>  Overwrite the default path to the history file [env: HISTORY_PATH=]
+  -d, --dry-run                      Whether to launch in dry-run mode (not actually open vscode) [env: DRY_RUN=]
+  -v, --verbose...                   More output per occurrence
+  -q, --quiet...                     Less output per occurrence
+  -h, --help                         Print help
 ```
 
 ##### Launch Behavior

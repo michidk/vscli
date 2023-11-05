@@ -1,4 +1,4 @@
-use std::{ffi::OsString, num::NonZeroUsize, path::PathBuf};
+use std::{ffi::OsString, path::PathBuf};
 
 use clap::{command, Parser, Subcommand};
 
@@ -33,7 +33,7 @@ pub(crate) struct Opts {
 
 #[derive(Subcommand, Debug)]
 pub(crate) enum Commands {
-    /// Opens a dev container
+    /// Opens a dev container.
     #[clap(alias = "o")]
     Open {
         /// The path of the vscode project to open
@@ -48,19 +48,15 @@ pub(crate) enum Commands {
         #[arg(short, long, default_value = LAUNCH_DETECT, ignore_case = true)]
         behavior: ContainerStrategy,
 
-        /// Index of the dev container to open (when using multiple dev containers)
-        #[arg(short, long, conflicts_with = "config")]
-        index: Option<NonZeroUsize>,
-
         /// Overwrites the path to the dev container config file
-        #[arg(short, long, env, conflicts_with = "index")]
+        #[arg(short, long, env)]
         config: Option<PathBuf>,
 
         /// Whether to launch the insider's version of vscode
         #[arg(short = 'n', long, env)]
         insiders: bool,
     },
-    /// Opens an interactive list of recently used workspaces
+    /// Opens an interactive list of recently used workspaces.
     #[clap(alias = "ui")]
     Recent,
 }

@@ -1,6 +1,7 @@
 use color_eyre::eyre::{bail, eyre, Result, WrapErr};
 use log::{debug, trace};
 use std::ffi::{OsStr, OsString};
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use walkdir::WalkDir;
@@ -9,9 +10,21 @@ use crate::uri::{DevcontainerUriJson, FileUriJson};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DevContainer {
-    pub path: PathBuf,
+    pub config_path: PathBuf,
     pub name: Option<String>,
-    pub path_in_container: String,
+    pub workspace_path_in_container: String,
+}
+
+// Used in the inquire select prompt
+impl Display for DevContainer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let path = self.config_path.display();
+        if let Some(name) = &self.name {
+            write!(f, "{name} ({path})")
+        } else {
+            write!(f, "{path}")
+        }
+    }
 }
 
 impl DevContainer {
@@ -37,8 +50,8 @@ impl DevContainer {
         };
 
         Ok(DevContainer {
-            path: path.to_owned(),
-            path_in_container: folder,
+            config_path: path.to_owned(),
+            workspace_path_in_container: folder,
             name,
         })
     }
@@ -159,10 +172,10 @@ impl Workspace {
         dev_container: &DevContainer,
     ) -> Result<()> {
         // get the folder path from the selected dev container
-        let container_folder: String = dev_container.path_in_container.clone();
+        let container_folder: String = dev_container.workspace_path_in_container.clone();
 
         let mut ws_path: String = self.path.to_string_lossy().into_owned();
-        let mut dc_path: String = dev_container.path.to_string_lossy().into_owned();
+        let mut dc_path: String = dev_container.config_path.to_string_lossy().into_owned();
 
         // detect WSL (excluding Docker containers)
         let is_wsl: bool = {
