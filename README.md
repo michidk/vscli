@@ -107,6 +107,24 @@ Options:
   -h, --help                         Print help (see more with '--help')
 ```
 
+##### Launch Behavior
+
+There are three launch behaviors:
+- `force-classic`: Launch vscode without a dev container
+- `force-container`: Launch vscode with a dev container, error if no dev container is found
+- `detect`: Detect whether the project is a dev container project, and launch the dev container if it is
+
+##### Detection Algorithm
+
+The detection algorithm determines which dev container config to launch.
+
+- First, check whether a dev container was specified via the `--index` flag -> launch it
+- Then checks whether a dev container config was specified via the `--config` flag -> launch it
+- Then loads the first dev container it finds
+  - If more than one exists -> show a list of dev containers and their index
+  - If one exists -> launch it
+  - If none exists -> launch vscode normally without a dev container
+
 #### Recent UI
 
 Opens an interactive list of recently used workspaces.

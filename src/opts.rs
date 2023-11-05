@@ -1,4 +1,4 @@
-use std::{ffi::OsString, path::PathBuf};
+use std::{ffi::OsString, num::NonZeroUsize, path::PathBuf};
 
 use clap::{command, Parser, Subcommand};
 
@@ -50,7 +50,7 @@ pub(crate) enum Commands {
 
         /// Index of the dev container to open (when using multiple dev containers)
         #[arg(short, long, conflicts_with = "config")]
-        index: Option<usize>,
+        index: Option<NonZeroUsize>,
 
         /// Overwrites the path to the dev container config file
         #[arg(short, long, env, conflicts_with = "index")]

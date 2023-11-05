@@ -1,22 +1,11 @@
 use color_eyre::eyre::{eyre, Result, WrapErr};
-use log::{debug, info, trace};
+use log::{debug, trace};
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use walkdir::WalkDir;
 
 use crate::uri::{DevcontainerUriJson, FileUriJson};
-
-/// A workspace is a folder which contains a vscode project.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Workspace {
-    /// The path of the workspace.
-    pub path: PathBuf,
-    /// The name of the workspace.
-    pub workspace_name: String,
-    /// The dev container configurations
-    pub dev_containers: Vec<DevContainer>,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DevContainer {
@@ -27,7 +16,7 @@ pub struct DevContainer {
 
 impl DevContainer {
     /// Creates a new `DevContainer` from a dev container config file and fallback workspace name.
-    pub fn from_config(path: &Path, workspace_name: String) -> Result<DevContainer> {
+    pub fn from_config(path: &Path, workspace_name: &str) -> Result<DevContainer> {
         let dev_container = Self::parse_dev_container_config(path)?;
         trace!("dev container config: {:?}", dev_container);
 
@@ -67,8 +56,17 @@ impl DevContainer {
     }
 }
 
+/// A workspace is a folder which contains a vscode project.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Workspace {
+    /// The path of the workspace.
+    pub path: PathBuf,
+    /// The name of the workspace.
+    pub name: String,
+}
+
 impl Workspace {
-    /// Creates a new `Workspace`` from the given path to a folder.
+    /// Creates a new `Workspace` from the given path to a folder.
     pub fn from_path(path: &Path) -> Result<Workspace> {
         // check for valid path
         if !path.exists() {
@@ -87,55 +85,80 @@ impl Workspace {
             .into_owned();
         trace!("Workspace name: {workspace_name}");
 
-        // parse dev containers and their properties
-        let mut dev_containers = Vec::<DevContainer>::new();
-        let configs = find_dev_container_configs(&path);
-        for config_path in &configs {
-            dev_containers.push(DevContainer::from_config(
-                config_path,
-                workspace_name.clone(),
-            )?);
-        }
-
         let ws = Workspace {
             path,
-            workspace_name,
-            dev_containers,
+            name: workspace_name,
         };
         trace!("{ws:?}");
         Ok(ws)
     }
 
-    /// Open vscode using the dev container extension.
+    /// Finds all dev container configs in the workspace.
+    ///
+    /// # Note
+    /// This searches in the following locations:
+    /// - A `.devcontainer.json` defined directly in the workspace folder.
+    /// - A `.devcontainer/devcontainer.json` defined in the `.devcontainer/` folder.
+    /// - Any `.devcontainer/**/devcontainer.json` file in any `.devcontainer/` subfolder (only one level deep).
+    /// This should results in a dev container detection algorithm similar to the one vscode uses.
+    pub fn find_dev_container_configs(&self) -> Vec<PathBuf> {
+        let mut configs = Vec::new();
+
+        // check if we have a `devcontainer.json` directly in the workspace
+        let direct_config = self.path.join(".devcontainer.json");
+        if direct_config.is_file() {
+            trace!("Found dev container config: {}", direct_config.display());
+            configs.push(direct_config);
+        }
+
+        // check configs one level deep in `.devcontainer/`
+        let dev_container_dir = self.path.join(".devcontainer");
+        for entry in WalkDir::new(dev_container_dir)
+            .max_depth(2)
+            .sort_by_file_name()
+            .into_iter()
+            .filter(|e| {
+                e.as_ref()
+                    .is_ok_and(|e| e.file_type().is_file() && e.file_name() == "devcontainer.json")
+            })
+            .flatten()
+        {
+            let path = entry.into_path();
+            trace!(
+                "Found dev container config in .devcontainer folder: {}",
+                path.display()
+            );
+            configs.push(path);
+        }
+
+        debug!(
+            "Found {} dev container configs: {:?}",
+            configs.len(),
+            configs
+        );
+
+        configs
+    }
+
+    pub fn load_dev_containers(&self, paths: &Vec<PathBuf>) -> Result<Vec<DevContainer>> {
+        // parse dev containers and their properties
+        let mut dev_containers = Vec::<DevContainer>::new();
+        for config_path in paths {
+            dev_containers.push(DevContainer::from_config(config_path, &self.name)?);
+        }
+
+        Ok(dev_containers)
+    }
+
+    /// Open vscode using the specified dev container.
     pub fn open(
         &self,
         args: &[OsString],
         insiders: bool,
         dry_run: bool,
-        dev_container: Option<DevContainer>,
+        dev_container: &DevContainer,
     ) -> Result<()> {
         // get the folder path from the selected dev container
-        let dev_container: DevContainer = if let Some(dev_container) = dev_container {
-            dev_container
-        } else if self.dev_containers.len() == 1 {
-            let dev_container = self.dev_containers.get(0).expect("Index out of bounds");
-            dev_container.clone()
-        } else {
-            let mut list = String::new();
-            for (i, dev_container) in self.dev_containers.iter().enumerate() {
-                let i = i + 1;
-                let path = dev_container.path.to_string_lossy();
-                let display = if let Some(name) = dev_container.name.clone() {
-                    format!("\n- [{i}] {name}: {path}")
-                } else {
-                    format!("\n- [{i}] {path}")
-                };
-                list.push_str(&display);
-            }
-            info!("Several dev container configurations found. Please use the --index flag to specify which one should be used:{list}");
-            return Ok(());
-        };
-
         let container_folder: String = dev_container.path_in_container.clone();
 
         let mut ws_path: String = self.path.to_string_lossy().into_owned();
@@ -227,53 +250,6 @@ impl Workspace {
         exec_code(&args, insiders, dry_run)
             .wrap_err_with(|| "Error opening vscode the classic way...")
     }
-}
-
-/// Finds all dev container configs in the workspace.
-///
-/// # Note
-/// This searches in the following locations:
-/// - A `.devcontainer.json` defined directly in the workspace folder.
-/// - A `.devcontainer/devcontainer.json` defined in the `.devcontainer/` folder.
-/// - Any `.devcontainer/**/devcontainer.json` file in any `.devcontainer/` subfolder (only one level deep).
-/// This should results in a dev container detection algorithm similar to the one vscode uses.
-pub fn find_dev_container_configs(path: &Path) -> Vec<PathBuf> {
-    let mut configs = Vec::new();
-
-    // check if we have a `devcontainer.json` directly in the workspace
-    let direct_config = path.join(".devcontainer.json");
-    if direct_config.is_file() {
-        trace!(
-            "Found main devcontainer config: {}",
-            direct_config.display()
-        );
-        configs.push(direct_config);
-    }
-
-    // check configs one level deep in `.devcontainer/`
-    let dev_container_dir = path.join(".devcontainer");
-    for entry in WalkDir::new(dev_container_dir)
-        .max_depth(2)
-        .sort_by_file_name()
-        .into_iter()
-        .filter(|e| {
-            e.as_ref()
-                .is_ok_and(|e| e.file_type().is_file() && e.file_name() == "devcontainer.json")
-        })
-        .flatten()
-    {
-        let path = entry.into_path();
-        trace!("Found dev container config: {}", path.display());
-        configs.push(path);
-    }
-
-    debug!(
-        "Found {} dev container configs: {:?}",
-        configs.len(),
-        configs
-    );
-
-    configs
 }
 
 /// Executes the vscode executable with the given arguments on unix.

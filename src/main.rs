@@ -16,15 +16,14 @@ mod workspace;
 
 use chrono::Utc;
 use clap::Parser;
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::Result;
 use log::trace;
 use std::io::Write;
 
 use crate::history::{Entry, Tracker};
 
-use crate::workspace::DevContainer;
 use crate::{
-    launch::{Behavior, Config},
+    launch::{Behavior, Setup},
     opts::Opts,
     workspace::Workspace,
 };
@@ -34,7 +33,7 @@ fn main() -> Result<()> {
     color_eyre::install()?;
 
     let opts = Opts::parse();
-    let opts_dbg = format!("{:#?}", opts);
+    let opts_dbg = format!("{opts:#?}");
 
     env_logger::Builder::from_default_env()
         .filter_level(opts.verbose.log_level_filter())
@@ -56,7 +55,7 @@ fn main() -> Result<()> {
         Tracker::load(tracker_path)?
     };
 
-    match &opts.command {
+    match opts.command {
         opts::Commands::Open {
             path,
             args,
@@ -68,31 +67,14 @@ fn main() -> Result<()> {
             // get workspace from args
             let path = path.as_path();
             let ws = Workspace::from_path(path)?;
-            let name = ws.workspace_name.clone();
-
-            // either use the dev container selected by index
-            let dev_container: Option<DevContainer> = if let Some(index) = index {
-                let index = index - 1;
-                if index >= ws.dev_containers.len() {
-                    let index = index + 1; // We want to show the index starting at 1
-                    return Err(eyre!("No dev container on position {index} found."));
-                }
-                Some(ws.dev_containers[index].clone())
-            } else {
-                // or use the dev container specified by path
-                if let Some(config) = config {
-                    Some(DevContainer::from_config(config, name.clone())?)
-                } else {
-                    None
-                }
-            };
+            let name = ws.name.clone();
 
             let behavior = Behavior {
-                strategy: *behavior,
-                insiders: *insiders,
+                strategy: behavior,
+                insiders,
                 args: args.clone(),
             };
-            let lc = Config::new(ws, behavior.clone(), dev_container, opts.dry_run);
+            let lc = Setup::new(ws, behavior.clone(), opts.dry_run, index, config);
             lc.launch()?;
 
             tracker.push(Entry {
@@ -107,17 +89,17 @@ fn main() -> Result<()> {
             let res = ui::start(&mut tracker)?;
             if let Some(entry) = res {
                 let ws = Workspace::from_path(&entry.path)?;
-                let name = ws.workspace_name.clone();
+                let _name = ws.name.clone();
                 // TODO: store dev container path in entry
-                let lc = Config::new(ws, entry.behavior.clone(), None, opts.dry_run);
-                lc.launch()?;
+                // let lc = LaunchConfig::new(ws, entry.behavior.clone(), None, opts.dry_run, *index, *config);
+                // lc.launch()?;
 
-                tracker.push(Entry {
-                    name,
-                    path: entry.path.clone(),
-                    last_opened: Utc::now(),
-                    behavior: entry.behavior.clone(),
-                });
+                // tracker.push(Entry {
+                //     name,
+                //     path: entry.path.clone(),
+                //     last_opened: Utc::now(),
+                //     behavior: entry.behavior.clone(),
+                // });
             }
         }
     }
