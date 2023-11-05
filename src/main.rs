@@ -49,7 +49,7 @@ fn main() -> Result<()> {
         } else {
             let mut tracker_path = dirs::data_local_dir().expect("Local data dir not found.");
             tracker_path.push("vscli");
-            tracker_path.push(".history.json");
+            tracker_path.push("history.json");
             tracker_path
         };
         Tracker::load(tracker_path)?
@@ -67,39 +67,47 @@ fn main() -> Result<()> {
             // get workspace from args
             let path = path.as_path();
             let ws = Workspace::from_path(path)?;
-            let name = ws.name.clone();
+            let ws_name = ws.name.clone();
 
             let behavior = Behavior {
                 strategy: behavior,
                 insiders,
                 args: args.clone(),
             };
-            let lc = Setup::new(ws, behavior.clone(), opts.dry_run, index, config);
-            lc.launch()?;
+            let setup = Setup::new(ws, behavior.clone(), opts.dry_run);
+            let dev_container = setup.launch(index, config)?;
 
             tracker.push(Entry {
-                name,
-                path: path.canonicalize()?,
-                last_opened: Utc::now(),
+                ws_name,
+                dc_name: dev_container
+                    .as_ref()
+                    .and_then(|dc| dc.name.as_ref().cloned()),
+                workspace_path: path.canonicalize()?,
+                config_path: dev_container.map(|dc| dc.path),
                 behavior,
+                last_opened: Utc::now(),
             });
         }
         opts::Commands::Recent => {
             // get workspace from user selection
             let res = ui::start(&mut tracker)?;
             if let Some(entry) = res {
-                let ws = Workspace::from_path(&entry.path)?;
-                let _name = ws.name.clone();
-                // TODO: store dev container path in entry
-                // let lc = LaunchConfig::new(ws, entry.behavior.clone(), None, opts.dry_run, *index, *config);
-                // lc.launch()?;
+                let ws = Workspace::from_path(&entry.workspace_path)?;
+                let ws_name = ws.name.clone();
 
-                // tracker.push(Entry {
-                //     name,
-                //     path: entry.path.clone(),
-                //     last_opened: Utc::now(),
-                //     behavior: entry.behavior.clone(),
-                // });
+                let setup = Setup::new(ws, entry.behavior.clone(), opts.dry_run);
+                let dev_container = setup.launch(None, entry.config_path)?;
+
+                tracker.push(Entry {
+                    ws_name,
+                    dc_name: dev_container
+                        .as_ref()
+                        .and_then(|dc| dc.name.as_ref().cloned()),
+                    workspace_path: entry.workspace_path.clone(),
+                    config_path: dev_container.map(|dc| dc.path),
+                    behavior: entry.behavior.clone(),
+                    last_opened: Utc::now(),
+                });
             }
         }
     }

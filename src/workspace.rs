@@ -1,4 +1,4 @@
-use color_eyre::eyre::{eyre, Result, WrapErr};
+use color_eyre::eyre::{bail, eyre, Result, WrapErr};
 use log::{debug, trace};
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
@@ -70,7 +70,7 @@ impl Workspace {
     pub fn from_path(path: &Path) -> Result<Workspace> {
         // check for valid path
         if !path.exists() {
-            return Err(eyre!("Path {} does not exist", path.display()));
+            bail!("Path {} does not exist", path.display());
         }
 
         // canonicalize path
@@ -163,8 +163,6 @@ impl Workspace {
 
         let mut ws_path: String = self.path.to_string_lossy().into_owned();
         let mut dc_path: String = dev_container.path.to_string_lossy().into_owned();
-        trace!("ws_path: {ws_path}");
-        trace!("dc_path: {dc_path}");
 
         // detect WSL (excluding Docker containers)
         let is_wsl: bool = {
@@ -214,20 +212,13 @@ impl Workspace {
             dc_path = dc_path.replace("\\\\?\\", "");
         }
 
-        // note: gotta run on windows, linux and wsl. currently tested: only wsl
-
-        trace!("ws_path: {ws_path}");
-        trace!("dc_path: {dc_path}");
         let folder_uri = DevcontainerUriJson {
             host_path: ws_path,
             config_file: FileUriJson::new(dc_path.as_str()),
         };
         let json = serde_jsonc::to_string(&folder_uri)?;
 
-        // let json = json!({
-        //     "hostPath": ws_path,
-        // }).to_string();
-        trace!("text: {json}");
+        trace!("Folder uri JSON: {json}");
 
         let hex = hex::encode(json.as_bytes());
         let uri = format!("vscode-remote://dev-container+{hex}{container_folder}");

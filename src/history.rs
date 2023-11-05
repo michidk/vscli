@@ -17,18 +17,28 @@ const MAX_HISTORY_ENTRIES: usize = 20;
 /// An entry in the history
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Entry {
-    pub name: String,
-    pub path: PathBuf,
+    /// The name of the workspace
+    pub ws_name: String,
+    /// The name of the dev container, if it exists
+    pub dc_name: Option<String>,
+    /// The path to the vscode workspace
+    pub workspace_path: PathBuf,
+    /// The path to the dev container config, if it exists
+    pub config_path: Option<PathBuf>,
+    /// The launch behavior
     #[serde(alias = "behaviour")]
     pub behavior: Behavior,
+    /// The time this entry was last opened
     pub last_opened: DateTime<Utc>, // not used in PartialEq, Eq, Hash
 }
 
-// Custom comparison which ignores `last_opened`
+// Custom comparison which ignores `last_opened` (and `name`)
 // This is used so that we don't add duplicate entries with different timestamps
 impl PartialEq for Entry {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.path == other.path && self.behavior == other.behavior
+        self.workspace_path == other.workspace_path
+            && self.config_path == other.config_path
+            && self.behavior == other.behavior
     }
 }
 
@@ -37,25 +47,30 @@ impl Eq for Entry {}
 // Required by BTreeSet since it's sorted
 impl Ord for Entry {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // check if two are equal by comparing all properties but `last_opened`
+        // check if two are equal by comparing all properties, ignoring `last_opened` (calling custom `.eq()`)
         if self.eq(other) {
             return Ordering::Equal;
         }
+        // If they are not equal, the ordering is given by `last_opened`
         self.last_opened.cmp(&other.last_opened)
     }
 }
 
+// Same as `Ord`
 impl PartialOrd for Entry {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.last_opened.cmp(&other.last_opened))
+        Some(self.cmp(other))
     }
 }
 
 /// Contains the recent used workspaces
-/// Note: `BTreeSet` so it's sorted and unique
+///
+/// # Note
+/// We use a `BTreeSet` so it's sorted and does not contain duplicates
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct History(BTreeSet<Entry>);
 
+// Transparent wrapper around `BTreeSet`
 impl Deref for History {
     type Target = BTreeSet<Entry>;
 
@@ -79,7 +94,9 @@ impl History {
 
 /// Manages the history and tracks the recently used workspaces
 pub struct Tracker {
+    /// The path to the history file
     path: PathBuf,
+    /// The history struct
     pub history: History,
 }
 

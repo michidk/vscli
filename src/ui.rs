@@ -8,13 +8,13 @@ use log::debug;
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Layout},
-    prelude::Alignment,
+    prelude::{Alignment, Direction, Rect},
     style::{Color, Style},
     text::Span,
     widgets::{Block, Borders, Cell, Padding, Paragraph, Row, Table, TableState},
     Frame, Terminal,
 };
-use std::{borrow::Cow, io};
+use std::{borrow::Cow, io, rc::Rc};
 
 use crate::history::{Entry, Tracker};
 
@@ -131,20 +131,29 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: UI) -> io::Result<Op
 fn render(frame: &mut Frame, app: &mut UI) {
     // Setup crossterm UI layout & style
     let area = Layout::default()
-        .constraints([Constraint::Percentage(100), Constraint::Min(2)].as_ref())
-        .margin(1)
+        .constraints(
+            [
+                Constraint::Percentage(100),
+                Constraint::Min(1),
+                Constraint::Min(1),
+                Constraint::Min(1),
+            ]
+            .as_ref(),
+        )
+        .horizontal_margin(1)
         .split(frame.size());
 
     let selected_style = Style::default().bg(Color::DarkGray);
     let normal_style = Style::default().bg(Color::Blue);
-    let header_cells = ["Name", "Path", "Last Opened"]
+    let header_cells = ["Workspace", "Dev Container", "Path", "Last Opened"]
         .iter()
         .map(|header| Cell::from(*header).style(Style::default().fg(Color::White)));
     let header = Row::new(header_cells).style(normal_style).height(1);
     let rows = app.tracker.history.iter().map(|item| {
         let cells: Vec<Cow<'_, str>> = vec![
-            Cow::Borrowed(&item.name),
-            item.path.to_string_lossy(),
+            Cow::Borrowed(&item.ws_name),
+            Cow::Borrowed(item.dc_name.as_ref().map_or("", String::as_str)),
+            item.workspace_path.to_string_lossy(),
             Cow::Owned(
                 item.last_opened
                     .clone()
@@ -157,21 +166,23 @@ fn render(frame: &mut Frame, app: &mut UI) {
     });
 
     // Limit the length of workspace names displayed
-    let longest_name: u16 = u16::min(
+    let longest_name: u16 = u16::clamp(
         app.tracker
             .history
             .iter()
-            .map(|entry| entry.name.clone())
+            .map(|entry| entry.ws_name.clone())
             .max_by_key(String::len)
-            .unwrap_or("0123467890123456789".to_string())
+            .unwrap_or("0123467890123456789".to_string()) // default to 20 if no entries are found
             .len()
             .try_into()
             .unwrap_or(20),
+        9, // length of the word `workspace`
         60,
     );
     let widths = [
         Constraint::Min(longest_name + 1),
-        Constraint::Percentage(100),
+        Constraint::Percentage(30),
+        Constraint::Percentage(70),
         Constraint::Min(20),
     ];
 
@@ -197,6 +208,44 @@ fn render(frame: &mut Frame, app: &mut UI) {
     // Gather additional information for the status area
     let strategy = map_or_default(selected, "-", |item| item.behavior.strategy.to_string());
     let insiders = map_or_default(selected, "-", |entry| entry.behavior.insiders.to_string());
+
+    // Render status area
+    let additional_info = Span::styled(
+        format!("Strategy: {strategy}, Insiders: {insiders}"),
+        Style::default().fg(Color::DarkGray),
+    );
+
+    let dc_path = selected.map_or_else(String::new, |entry| {
+        entry
+            .config_path
+            .clone()
+            .map(|f| f.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    });
+
+    let status_area: Rc<[Rect]> = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)].as_ref())
+        .split(area[1]);
+
+    let status_block = Block::default().padding(Padding::new(2, 2, 0, 0));
+    let additional_info_par = Paragraph::new(additional_info)
+        .block(status_block.clone())
+        .alignment(Alignment::Right);
+    frame.render_widget(additional_info_par, status_area[1]);
+
+    // Instructions
+    let instruction = Span::styled(
+        "Press x to remove the selected item. Press q to quit.",
+        Style::default().fg(Color::Gray),
+    );
+    let instructions_par = Paragraph::new(instruction)
+        .block(status_block.clone())
+        .alignment(Alignment::Left);
+
+    frame.render_widget(instructions_par, status_area[0]);
+
+    // Args
     let args_count = map_or_default(selected, "0", |entry| entry.behavior.args.len().to_string());
     let args = selected.map_or(String::from("-"), |entry| {
         let converted_str: Vec<&str> = entry
@@ -209,37 +258,27 @@ fn render(frame: &mut Frame, app: &mut UI) {
                     .expect("Failed to convert `OsStr` into `&str`")
             })
             .collect();
-        converted_str.join(" ")
+        converted_str.join(", ")
     });
 
-    // Render status area
-    let additional_info = Span::styled(
-        format!("Strategy: {strategy}, Insiders: {insiders}, Args ({args_count}): {args}"),
+    let args_info = Span::styled(
+        format!("Args ({args_count}): {args}"),
         Style::default().fg(Color::DarkGray),
     );
-
-    let status_area = Layout::default()
-        .direction(ratatui::prelude::Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)].as_ref())
-        .split(area[1]);
-
-    let status_block = Block::default().padding(Padding::new(5, 5, 0, 0));
-    let additional_info_par = Paragraph::new(additional_info)
+    let args_info_par = Paragraph::new(args_info)
         .block(status_block.clone())
         .alignment(Alignment::Right);
-    frame.render_widget(additional_info_par, status_area[1]);
+    frame.render_widget(args_info_par, area[2]);
 
-    // Instructions
-    let instruction = Span::styled(
-        "Press x to remove the selected item.",
+    // Dev container path
+    let dc_path_info = Span::styled(
+        format!("Dev Container: {dc_path}"),
         Style::default().fg(Color::DarkGray),
     );
-    let instructions_par = Paragraph::new(instruction)
+    let dc_path_info_par = Paragraph::new(dc_path_info)
         .block(status_block)
-        .alignment(Alignment::Left);
-
-    // Render
-    frame.render_widget(instructions_par, status_area[0]);
+        .alignment(Alignment::Right);
+    frame.render_widget(dc_path_info_par, area[3]);
 }
 
 /// Maps an option to a string, using a default value if the option is `None`
