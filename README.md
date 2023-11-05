@@ -2,7 +2,7 @@
 
 [![MIT License](https://img.shields.io/crates/l/vscli)](https://choosealicense.com/licenses/mit/) [![Continuous integration](https://github.com/michidk/vscli/workflows/Continuous%20Integration/badge.svg)](https://github.com/michidk/vscli/actions)
 
-A CLI tool to launch vscode projects, which supports [dev container](https://containers.dev/).
+A CLI tool to launch [Visual Studio Code](https://code.visualstudio.com/) (vscode) projects, which supports [dev container](https://containers.dev/).
 
 ![Screenshot showing the recent UI feature.](.github/images/recent.png)
 
@@ -10,7 +10,7 @@ A CLI tool to launch vscode projects, which supports [dev container](https://con
 
 - A shorthand for launching vscode projects (to be used like the `code` command but with dev container support)
 - Detects whether a project is a [dev container](https://containers.dev/) project, and launches the dev container instead
-- Support [multiple dev containers](https://github.com/microsoft/vscode-docs/blob/main/remote-release-notes/v1_75.md#folders-with-multiple-dev containerjson-files) in the same project
+- Supports [multiple dev containers](https://github.com/microsoft/vscode-docs/blob/main/remote-release-notes/v1_75.md#folders-with-multiple-devcontainerjson-files) in the same project
 - Supports the [insiders](https://code.visualstudio.com/insiders/) version of vscode
 - Tracks your projects and allows you to open them using a CLI-based UI
 
