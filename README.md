@@ -124,6 +124,7 @@ Options:
 ##### Launch Behavior
 
 There are three launch behaviors:
+
 - `force-classic`: Launch vscode without a dev container
 - `force-container`: Launch vscode with a dev container, error if no dev container is found
 - `detect`: Detect whether the project is a dev container project, and launch the dev container if it is
@@ -132,10 +133,9 @@ There are three launch behaviors:
 
 The detection algorithm determines which dev container config to launch.
 
-- First, check whether a dev container was specified via the `--index` flag -> launch it
-- Then checks whether a dev container config was specified via the `--config` flag -> launch it
+- First, check whether a dev container config was specified via the `--config` flag -> launch it
 - Then loads the first dev container it finds
-  - If more than one exists -> show a list of dev containers and their index
+  - If more than one exists -> show a interactive list of dev containers and let the user select one
   - If one exists -> launch it
   - If none exists -> launch vscode normally without a dev container
 
@@ -175,13 +175,9 @@ vscli open --behavior force-container .  # force open vscode dev container (even
 vscli open --behavior force-classic .    # force open vscode without a dev container (even if vscli did detect a dev container)
 ```
 
-You can select a specific dev container when using [multiple](https://containers.dev/implementors/spec/#devcontainerjson) configurations using the `--index` flag:
+When you open a project containing more than one dev container config, you will be prompted to select one:
+![Screenshot showing the dev container selection UI.](.github/images/select.png)
 
-```sh
-vscli open --index 1 .               # open the first dev container in the current directory
-```
-
-To see the possible indexes, launch `vscli` without the --index flag first (only works in projects using multiple dev containers).
 
 You can launch the insiders version of vscode using the `--insiders` flag:
 
