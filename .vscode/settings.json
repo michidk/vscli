@@ -1,5 +1,6 @@
 {
   "cSpell.words": [
+    "behaviour",
     "canonicalize",
     "Canonicalized",
     "canonicalizing",
@@ -7,11 +8,11 @@
     "Devcontainer",
     "devcontainers",
     "ratatui",
+    "vscli",
     "VSCLI",
-    "WSLENV",
-    "wslpath",
     "vscode",
-    "vscli"
+    "WSLENV",
+    "wslpath"
   ],
   "cSpell.ignorePaths": [
     "package-lock.json",

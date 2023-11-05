@@ -34,14 +34,14 @@ fn main() -> Result<()> {
     color_eyre::install()?;
 
     let opts = Opts::parse();
+    let opts_dbg = format!("{:#?}", opts);
 
-    env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or(opts.verbosity.as_str()),
-    )
-    .format(move |buf, record| log_format(buf, record, opts.verbosity))
-    .init();
+    env_logger::Builder::from_default_env()
+        .filter_level(opts.verbose.log_level_filter())
+        .format(move |buf, record| log_format(buf, record, opts.verbose.log_level_filter()))
+        .init();
 
-    debug!("Parsed Opts:\n{:#?}", opts);
+    debug!("Parsed Opts:\n{}", opts_dbg);
 
     // Setup the tracker
     let mut tracker = {
@@ -57,8 +57,7 @@ fn main() -> Result<()> {
     };
 
     match &opts.command {
-        // recent command
-        Some(opts::Commands::Recent) => {
+        opts::Commands::Recent => {
             // get workspace from user selection
             let res = ui::start(&mut tracker)?;
             if let Some(entry) = res {
@@ -76,14 +75,20 @@ fn main() -> Result<()> {
                 });
             }
         }
-        // default behavior
-        None => {
+        opts::Commands::Open {
+            path,
+            args,
+            behavior,
+            index,
+            config,
+            insiders,
+        } => {
             // get workspace from args
-            let path = opts.path.as_path();
+            let path = path.as_path();
             let ws = Workspace::from_path(path)?;
             let name = ws.workspace_name.clone();
 
-            let devcontainer: Option<Devcontainer> = if let Some(index) = opts.index {
+            let devcontainer: Option<Devcontainer> = if let Some(index) = index {
                 let index = index - 1;
                 if index >= ws.devcontainers.len() {
                     return Err(eyre!("No devcontainer on position {index} found."));
@@ -94,9 +99,9 @@ fn main() -> Result<()> {
             };
 
             let behavior = Behavior {
-                strategy: opts.behavior,
-                insiders: opts.insiders,
-                args: opts.args,
+                strategy: *behavior,
+                insiders: *insiders,
+                args: args.clone(),
             };
             let lc = Config::new(ws, behavior.clone(), devcontainer, opts.dry_run);
             lc.launch()?;
