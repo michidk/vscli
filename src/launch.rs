@@ -53,9 +53,9 @@ impl FromStr for ContainerStrategy {
 impl Display for ContainerStrategy {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Detect => write!(f, "{LAUNCH_DETECT}"),
-            Self::ForceContainer => write!(f, "{LAUNCH_FORCE_CONTAINER}"),
-            Self::ForceClassic => write!(f, "{LAUNCH_FORCE_CLASSIC}"),
+            Self::Detect => f.write_str(LAUNCH_DETECT),
+            Self::ForceContainer => f.write_str(LAUNCH_FORCE_CONTAINER),
+            Self::ForceClassic => f.write_str(LAUNCH_FORCE_CLASSIC),
         }
     }
 }
@@ -88,14 +88,15 @@ impl Setup {
 
     fn detect(&self, config: Option<PathBuf>) -> Result<Option<DevContainer>> {
         let name = self.workspace.name.clone();
-        let configs = self.workspace.find_dev_container_configs();
 
         if let Some(config) = config {
             trace!("Dev container set by path: {config:?}");
             Ok(Some(DevContainer::from_config(config.as_path(), &name)?))
         } else {
-            // ... or use the first dev container found
-            let mut dev_containers = self.workspace.load_dev_containers(&configs)?;
+            // TODO: This seems incorrect -> ... or use the first dev container found
+            let configs = self.workspace.find_dev_container_configs();
+
+            let dev_containers = self.workspace.load_dev_containers(&configs)?;
             // but check if multiple are defined first
             match configs.len() {
                 0 => {
@@ -104,7 +105,7 @@ impl Setup {
                 }
                 1 => {
                     trace!("Select only dev container");
-                    Ok(Some(dev_containers.remove(0)))
+                    Ok(dev_containers.into_iter().next())
                 }
                 _ => Ok(Some(
                     Select::new(
@@ -119,7 +120,7 @@ impl Setup {
 
     /// Launches vscode with the given configuration.
     /// Returns the dev container that was used, if any.
-    pub fn launch(&self, config: Option<PathBuf>) -> Result<Option<DevContainer>> {
+    pub fn launch(self, config: Option<PathBuf>) -> Result<Option<DevContainer>> {
         match self.behavior.strategy {
             ContainerStrategy::Detect => {
                 let dev_container = self.detect(config)?;
@@ -127,7 +128,7 @@ impl Setup {
                 if let Some(ref dev_container) = dev_container {
                     info!("Opening dev container...");
                     self.workspace.open(
-                        &self.behavior.args,
+                        self.behavior.args,
                         self.behavior.insiders,
                         self.dry_run,
                         dev_container,
@@ -135,7 +136,7 @@ impl Setup {
                 } else {
                     info!("Dev containers not found, opening without containers...");
                     self.workspace.open_classic(
-                        &self.behavior.args,
+                        self.behavior.args,
                         self.behavior.insiders,
                         self.dry_run,
                     )?;
@@ -148,7 +149,7 @@ impl Setup {
                 if let Some(ref dev_container) = dev_container {
                     info!("Force opening dev container...");
                     self.workspace.open(
-                        &self.behavior.args,
+                        self.behavior.args,
                         self.behavior.insiders,
                         self.dry_run,
                         dev_container,
@@ -161,7 +162,7 @@ impl Setup {
             ContainerStrategy::ForceClassic => {
                 info!("Opening vscode without dev containers...");
                 self.workspace.open_classic(
-                    &self.behavior.args,
+                    self.behavior.args,
                     self.behavior.insiders,
                     self.dry_run,
                 )?;

@@ -24,6 +24,7 @@ impl FileUriJson {
 
 impl Serialize for FileUriJson {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // TODO: Why tf is this 4; I only count 3
         let mut map = serializer.serialize_map(Some(4))?;
         map.serialize_entry("scheme", "file")?;
         if let Some(authority) = &self.authority {

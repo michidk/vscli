@@ -1,5 +1,6 @@
 use color_eyre::eyre::{bail, eyre, Result, WrapErr};
 use log::{debug, trace};
+use std::collections::VecDeque;
 use std::ffi::{OsStr, OsString};
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
@@ -69,6 +70,15 @@ impl DevContainer {
     }
 }
 
+// TODO: Could do something like this and use it instead of raw jsonc value.
+//       Is maybe a bit cleaner (and maybe a bit more memory efficient) but no big upside
+//
+// #[derive(Deserialize)]
+// struct ContainerConfig {
+//      worsplaceFolder: Option<String>,
+//      ...
+// }
+
 /// A workspace is a folder which contains a vscode project.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Workspace {
@@ -88,7 +98,7 @@ impl Workspace {
 
         // canonicalize path
         let path = std::fs::canonicalize(path).wrap_err_with(|| "Error canonicalizing path")?;
-        trace!("Canonicalized path: {}", path.to_string_lossy());
+        trace!("Canonicalized path: {}", path.display());
 
         // get workspace name (either directory or file name)
         let workspace_name = path
@@ -130,10 +140,7 @@ impl Workspace {
             .max_depth(2)
             .sort_by_file_name()
             .into_iter()
-            .filter(|e| {
-                e.as_ref()
-                    .is_ok_and(|e| e.file_type().is_file() && e.file_name() == "devcontainer.json")
-            })
+            .filter(|e| matches!(e, Ok(x) if x.file_type().is_file() && x.file_name() == "devcontainer.json"))
             .flatten()
         {
             let path = entry.into_path();
@@ -153,20 +160,18 @@ impl Workspace {
         configs
     }
 
-    pub fn load_dev_containers(&self, paths: &Vec<PathBuf>) -> Result<Vec<DevContainer>> {
+    pub fn load_dev_containers(&self, paths: &[PathBuf]) -> Result<Vec<DevContainer>> {
         // parse dev containers and their properties
-        let mut dev_containers = Vec::<DevContainer>::new();
-        for config_path in paths {
-            dev_containers.push(DevContainer::from_config(config_path, &self.name)?);
-        }
-
-        Ok(dev_containers)
+        paths
+            .iter()
+            .map(|config_path| DevContainer::from_config(config_path, &self.name))
+            .collect::<Result<Vec<_>, _>>()
     }
 
     /// Open vscode using the specified dev container.
     pub fn open(
         &self,
-        args: &[OsString],
+        mut args: Vec<OsString>,
         insiders: bool,
         dry_run: bool,
         dev_container: &DevContainer,
@@ -192,6 +197,8 @@ impl Workspace {
 
                 // Check if the output contains "Microsoft" or "WSL" which are indicators of WSL environment
                 // Also we want to check for the WSLENV variable, which is not available in Docker containers
+                // CHECK: Would it make sense to only check for WSLENV; Some distros might not
+                // include the search strings ...
                 (uname_output.contains("Microsoft") || uname_output.contains("WSL"))
                     && std::env::var("WSLENV").is_ok()
             }
@@ -203,6 +210,7 @@ impl Workspace {
 
         if is_wsl {
             debug!("WSL detected");
+            // CHECK: Not so nice to work on paths in "string" fashion
             ws_path = wslpath2::convert(
                 ws_path.as_str(),
                 None,
@@ -236,35 +244,42 @@ impl Workspace {
         let hex = hex::encode(json.as_bytes());
         let uri = format!("vscode-remote://dev-container+{hex}{container_folder}");
 
-        let mut args = args.to_owned();
-        args.push(OsStr::new("--folder-uri").to_owned());
-        args.push(OsStr::new(uri.as_str()).to_owned());
+        // TODO: Might want to check first if the argument is already present (and skip if so?)
+        args.push(OsString::from("--folder-uri"));
+        args.push(OsString::from(uri.as_str()));
 
-        exec_code(&args, insiders, dry_run)
+        exec_code(args, insiders, dry_run)
             .wrap_err_with(|| "Error opening vscode using dev container...")
     }
 
     /// Open vscode like with the `code` command
-    pub fn open_classic(&self, args: &Vec<OsString>, insiders: bool, dry_run: bool) -> Result<()> {
+    pub fn open_classic(
+        &self,
+        mut args: Vec<OsString>,
+        insiders: bool,
+        dry_run: bool,
+    ) -> Result<()> {
         trace!("path: {}", self.path.display());
         trace!("args: {:?}", args);
 
-        let mut args = args.clone();
         args.insert(0, self.path.as_os_str().to_owned());
-        exec_code(&args, insiders, dry_run)
+        exec_code(args, insiders, dry_run)
             .wrap_err_with(|| "Error opening vscode the classic way...")
     }
 }
 
 /// Executes the vscode executable with the given arguments on unix.
 #[cfg(unix)]
-fn exec_code(args: &Vec<OsString>, insiders: bool, dry_run: bool) -> Result<()> {
+fn exec_code(args: Vec<OsString>, insiders: bool, dry_run: bool) -> Result<()> {
     let cmd = if insiders { "code-insiders" } else { "code" };
     // test if cmd exists
     Command::new(cmd)
         .arg("-v")
         .output()
         .wrap_err_with(|| format!("`{cmd}` does not exists."))?;
+
+    // TODO: code bellow here is shared between both functions, might want to unify those parts and
+    // only make os-specific check_exists functions.
 
     debug!("executable: {cmd}");
     debug!("final args: {:?}", args);
@@ -278,9 +293,8 @@ fn exec_code(args: &Vec<OsString>, insiders: bool, dry_run: bool) -> Result<()> 
 
 /// Executes the vscode executable with the given arguments on Windows.
 #[cfg(windows)]
-fn exec_code(args: &Vec<OsString>, insiders: bool, dry_run: bool) -> Result<()> {
+fn exec_code(mut args: Vec<OsString>, insiders: bool, dry_run: bool) -> Result<()> {
     let cmd = "cmd";
-    let mut args = args.clone();
     args.insert(0, OsString::from("/c"));
     args.insert(
         1,

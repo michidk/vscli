@@ -21,6 +21,7 @@ pub struct Entry {
     pub ws_name: String,
     /// The name of the dev container, if it exists
     pub dc_name: Option<String>,
+    /// TODO: workspace_path here and wc_name above (same with dc) ...
     /// The path to the vscode workspace
     pub workspace_path: PathBuf,
     /// The path to the dev container config, if it exists
@@ -103,49 +104,59 @@ pub struct Tracker {
 impl Tracker {
     /// Loads the history from a file
     pub fn load<P: Into<PathBuf>>(path: P) -> Result<Self> {
-        let path = path.into();
-        if path.exists() {
-            let file = File::open(&path)?;
-            let history: Result<History, serde_jsonc::Error> = serde_jsonc::from_reader(file);
-
-            // ignore parsing errors
-            // move the file and start from scratch
-            if let Err(err) = history {
-                // find a non-existent backup file
-                let new_path = (0..10_000) // Set an upper limit of filename checks.
-                    .map(|i| path.with_file_name(format!(".vscli_history_{i}.json.bak")))
-                    .find(|path| !path.exists())
-                    .unwrap_or_else(|| path.with_file_name(".vscli_history.json.bak"));
-
-                fs::rename(&path, new_path.clone()).wrap_err_with(|| {
-                    format!(
-                        "Could not move history file from `{}` to `{}`",
-                        path.to_string_lossy(),
-                        new_path.to_string_lossy()
-                    )
-                })?;
-
-                warn!(
-                    "Could not read history file: {err}\nMoved broken file to `{}`",
-                    new_path.to_string_lossy()
-                );
-                return Ok(Self {
+        // Code size optimization: With rusts monomorphization it would generate
+        // a "new/separate" function for each generic argument used to call this function.
+        // Having this inner function does not prevent it but can drastically cuts down on generated
+        // code size.
+        fn load_inner(path: PathBuf) -> Result<Tracker> {
+            if !path.exists() {
+                // cap of 1, because in the application lifetime, we only ever add one element before exiting
+                return Ok(Tracker {
                     path,
                     history: History::default(),
                 });
             }
 
-            let history = history.unwrap(); // UNWRAP: we cool, since we check for err before
-            debug!("Imported {:?} history entries", history.len());
+            let file = File::open(&path)?;
+            match serde_jsonc::from_reader::<_, History>(file) {
+                Ok(history) => {
+                    debug!("Imported {:?} history entries", history.len());
 
-            Ok(Self { path, history })
-        } else {
-            // cap of 1, because in the application lifetime, we only ever add one element before exiting
-            Ok(Self {
-                path,
-                history: History::default(),
-            })
+                    Ok(Tracker { path, history })
+                }
+                Err(err) => {
+                    // ignore parsing errors
+                    // move the file and start from scratch
+
+                    // find a non-existent backup file
+                    let new_path = (0..10_000) // Set an upper limit of filename checks.
+                    .map(|i| path.with_file_name(format!(".vscli_history_{i}.json.bak")))
+                    .find(|path| !path.exists())
+                    .unwrap_or_else(|| path.with_file_name(".vscli_history.json.bak"));
+
+                    fs::rename(&path, &new_path).wrap_err_with(|| {
+                        format!(
+                            "Could not move history file from `{}` to `{}`",
+                            path.display(),
+                            new_path.display()
+                        )
+                    })?;
+
+                    warn!(
+                        "Could not read history file: {err}\nMoved broken file to `{}`",
+                        new_path.display()
+                    );
+
+                    Ok(Tracker {
+                        path,
+                        history: History::default(),
+                    })
+                }
+            }
         }
+
+        let path = path.into();
+        load_inner(path)
     }
 
     /// Pushes a new entry to the history
