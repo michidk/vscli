@@ -45,7 +45,7 @@ pub(crate) enum Commands {
         args: Vec<OsString>,
 
         /// Launch behavior
-        #[arg(short, long, default_value = LAUNCH_DETECT, ignore_case = true)]
+        #[arg(short, long, default_value_t = ContainerStrategy::Detect, ignore_case = true)]
         behavior: ContainerStrategy,
 
         /// Overwrites the path to the dev container config file

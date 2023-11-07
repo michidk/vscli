@@ -14,7 +14,7 @@ use ratatui::{
     widgets::{Block, Borders, Cell, Padding, Paragraph, Row, Table, TableState},
     Frame, Terminal,
 };
-use std::{borrow::Cow, io, rc::Rc};
+use std::{borrow::Cow, ffi::OsStr, io, rc::Rc};
 
 use crate::history::{Entry, Tracker};
 
@@ -90,10 +90,7 @@ pub(crate) fn start(tracker: &mut Tracker) -> Result<Option<Entry>> {
     terminal.show_cursor()?;
     debug!("Terminal restored");
 
-    match res {
-        Ok(opt_index) => Ok(opt_index.and_then(|index| tracker.history.iter().nth(index).cloned())),
-        Err(message) => Err(eyre!("Error: {:?}", message))?,
-    }
+    Ok(res?.and_then(|index| tracker.history.iter().nth(index).cloned()))
 }
 
 /// UI main loop
@@ -149,10 +146,14 @@ fn render(frame: &mut Frame, app: &mut UI) {
         .iter()
         .map(|header| Cell::from(*header).style(Style::default().fg(Color::White)));
     let header = Row::new(header_cells).style(normal_style).height(1);
+
+    // TODO: Might want to think about mapping/converting the entires
+    // once before displaying (this would then reduce the computations of `to_string_lossy` and
+    // datetime formatting to once instead of on each render call)
     let rows = app.tracker.history.iter().map(|item| {
         let cells: Vec<Cow<'_, str>> = vec![
             Cow::Borrowed(&item.ws_name),
-            Cow::Borrowed(item.dc_name.as_ref().map_or("", String::as_str)),
+            Cow::Borrowed(item.dc_name.as_deref().unwrap_or("")),
             item.workspace_path.to_string_lossy(),
             Cow::Owned(
                 item.last_opened
@@ -170,12 +171,11 @@ fn render(frame: &mut Frame, app: &mut UI) {
         app.tracker
             .history
             .iter()
-            .map(|entry| entry.ws_name.clone())
-            .max_by_key(String::len)
-            .unwrap_or("0123467890123456789".to_string()) // default to 20 if no entries are found
-            .len()
-            .try_into()
-            .unwrap_or(20),
+            .map(
+                |s| s.ws_name.len(), /*TODO: might want to do some bound/overflow checking*/
+            )
+            .max()
+            .unwrap_or(20) as u16,
         9, // length of the word `workspace`
         60,
     );
@@ -206,7 +206,7 @@ fn render(frame: &mut Frame, app: &mut UI) {
         .nth(app.state.selected().unwrap_or(0));
 
     // Gather additional information for the status area
-    let strategy = map_or_default(selected, "-", |item| item.behavior.strategy.to_string());
+    let strategy = map_or_default(selected, "-", |entry| entry.behavior.strategy.to_string());
     let insiders = map_or_default(selected, "-", |entry| entry.behavior.insiders.to_string());
 
     // Render status area
@@ -214,14 +214,6 @@ fn render(frame: &mut Frame, app: &mut UI) {
         format!("Strategy: {strategy}, Insiders: {insiders}"),
         Style::default().fg(Color::DarkGray),
     );
-
-    let dc_path = selected.map_or_else(String::new, |entry| {
-        entry
-            .config_path
-            .clone()
-            .map(|f| f.to_string_lossy().into_owned())
-            .unwrap_or_default()
-    });
 
     let status_area: Rc<[Rect]> = Layout::default()
         .direction(Direction::Horizontal)
@@ -247,16 +239,13 @@ fn render(frame: &mut Frame, app: &mut UI) {
 
     // Args
     let args_count = map_or_default(selected, "0", |entry| entry.behavior.args.len().to_string());
+    // TODO: Same here, would compute once then just display a dumb string
     let args = selected.map_or(String::from("-"), |entry| {
-        let converted_str: Vec<&str> = entry
+        let converted_str: Vec<Cow<'_, str>> = entry
             .behavior
             .args
             .iter()
-            .map(|os_str| {
-                os_str
-                    .to_str()
-                    .expect("Failed to convert `OsStr` into `&str`")
-            })
+            .map(|arg| arg.to_string_lossy())
             .collect();
         converted_str.join(", ")
     });
@@ -271,6 +260,13 @@ fn render(frame: &mut Frame, app: &mut UI) {
     frame.render_widget(args_info_par, area[2]);
 
     // Dev container path
+    let dc_path = selected.map_or_else(String::new, |entry| {
+        entry
+            .config_path
+            .as_ref()
+            .map(|f| f.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    });
     let dc_path_info = Span::styled(
         format!("Dev Container: {dc_path}"),
         Style::default().fg(Color::DarkGray),
