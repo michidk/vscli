@@ -1,4 +1,4 @@
-use color_eyre::eyre::{eyre, Result};
+use color_eyre::eyre::Result;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
     execute,
@@ -14,7 +14,7 @@ use ratatui::{
     widgets::{Block, Borders, Cell, Padding, Paragraph, Row, Table, TableState},
     Frame, Terminal,
 };
-use std::{borrow::Cow, ffi::OsStr, io, rc::Rc};
+use std::{borrow::Cow, io, rc::Rc};
 
 use crate::history::{Entry, Tracker};
 
@@ -97,7 +97,7 @@ pub(crate) fn start(tracker: &mut Tracker) -> Result<Option<Entry>> {
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: UI) -> io::Result<Option<usize>> {
     app.state.select(Some(0)); // Select the most recent element by default
 
-    let entries: Vec<Row> = app
+    let rows: Vec<Row> = app
         .tracker
         .history
         .iter()
@@ -117,7 +117,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: UI) -> io::Result<Op
         .collect();
 
     loop {
-        terminal.draw(|f| render(f, &mut app, entries))?;
+        terminal.draw(|f| render(f, &mut app, rows.clone()))?;
 
         if let Event::Key(key) = event::read()? {
             if key.kind != KeyEventKind::Press {
@@ -168,21 +168,31 @@ fn render(frame: &mut Frame, app: &mut UI, rows: Vec<Row>) {
     let header = Row::new(header_cells).style(normal_style).height(1);
 
     // Limit the length of workspace names displayed
-    let longest_name: u16 = u16::clamp(
+    let longest_ws_name = u16::try_from(
         app.tracker
             .history
             .iter()
-            .map(
-                |s| s.workspace_name.len(), /*TODO: might want to do some bound/overflow checking*/
-            )
+            .map(|s| s.workspace_name.len())
             .max()
-            .unwrap_or(20) as u16,
-        9, // length of the word `workspace`
-        60,
-    );
+            .unwrap_or(20)
+            .clamp(9, 60),
+    )
+    .unwrap_or(20);
+
+    let longest_dc_name = u16::try_from(
+        app.tracker
+            .history
+            .iter()
+            .filter_map(|s| s.dev_container_name.as_ref().map(|name| name.len()))
+            .max()
+            .unwrap_or(20)
+            .clamp(9, 60),
+    )
+    .unwrap_or(20);
+
     let widths = [
-        Constraint::Min(longest_name + 1),
-        Constraint::Percentage(30),
+        Constraint::Min(longest_ws_name + 1),
+        Constraint::Min(longest_dc_name + 1),
         Constraint::Percentage(70),
         Constraint::Min(20),
     ];
@@ -240,7 +250,6 @@ fn render(frame: &mut Frame, app: &mut UI, rows: Vec<Row>) {
 
     // Args
     let args_count = map_or_default(selected, "0", |entry| entry.behavior.args.len().to_string());
-    // TODO: Same here, would compute once then just display a dumb string
     let args = selected.map_or(String::from("-"), |entry| {
         let converted_str: Vec<Cow<'_, str>> = entry
             .behavior
@@ -272,9 +281,7 @@ fn render(frame: &mut Frame, app: &mut UI, rows: Vec<Row>) {
         format!("Dev Container: {dc_path}"),
         Style::default().fg(Color::DarkGray),
     );
-    let dc_path_info_par = Paragraph::new(dc_path_info)
-        .block(status_block)
-        .alignment(Alignment::Right);
+    let dc_path_info_par = Paragraph::new(dc_path_info).block(status_block);
     frame.render_widget(dc_path_info_par, area[3]);
 }
 

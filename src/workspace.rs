@@ -1,6 +1,6 @@
 use color_eyre::eyre::{bail, eyre, Result, WrapErr};
 use log::{debug, trace};
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -68,15 +68,6 @@ impl DevContainer {
         Ok(config)
     }
 }
-
-// TODO: Could do something like this and use it instead of raw jsonc value.
-//       Is maybe a bit cleaner (and maybe a bit more memory efficient) but no big upside
-//
-// #[derive(Deserialize)]
-// struct ContainerConfig {
-//      worsplaceFolder: Option<String>,
-//      ...
-// }
 
 /// A workspace is a folder which contains a vscode project.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -175,6 +166,11 @@ impl Workspace {
         dry_run: bool,
         dev_container: &DevContainer,
     ) -> Result<()> {
+        // Checking if '--folder-uri' is present in the arguments
+        if args.iter().any(|arg| arg == "--folder-uri") {
+            bail!("Specifying `--folder-uri` is not possible while using vscli.");
+        }
+
         // get the folder path from the selected dev container
         let container_folder: String = dev_container.workspace_path_in_container.clone();
 
@@ -196,8 +192,6 @@ impl Workspace {
 
                 // Check if the output contains "Microsoft" or "WSL" which are indicators of WSL environment
                 // Also we want to check for the WSLENV variable, which is not available in Docker containers
-                // CHECK: Would it make sense to only check for WSLENV; Some distros might not
-                // include the search strings ...
                 (uname_output.contains("Microsoft") || uname_output.contains("WSL"))
                     && std::env::var("WSLENV").is_ok()
             }
@@ -243,7 +237,6 @@ impl Workspace {
         let hex = hex::encode(json.as_bytes());
         let uri = format!("vscode-remote://dev-container+{hex}{container_folder}");
 
-        // TODO: Might want to check first if the argument is already present (and skip if so?)
         args.push(OsString::from("--folder-uri"));
         args.push(OsString::from(uri.as_str()));
 
@@ -267,7 +260,7 @@ impl Workspace {
     }
 }
 
-/// Executes the vscode executable with the given arguments on unix.
+/// Executes the vscode executable with the given arguments on Unix.
 #[cfg(unix)]
 fn exec_code(args: Vec<OsString>, insiders: bool, dry_run: bool) -> Result<()> {
     let cmd = if insiders { "code-insiders" } else { "code" };
@@ -277,17 +270,7 @@ fn exec_code(args: Vec<OsString>, insiders: bool, dry_run: bool) -> Result<()> {
         .output()
         .wrap_err_with(|| format!("`{cmd}` does not exists."))?;
 
-    // TODO: code bellow here is shared between both functions, might want to unify those parts and
-    // only make os-specific check_exists functions.
-
-    debug!("executable: {cmd}");
-    debug!("final args: {:?}", args);
-
-    if !dry_run {
-        Command::new(cmd).args(args).output()?;
-    }
-
-    Ok(())
+    run(cmd, args, dry_run)
 }
 
 /// Executes the vscode executable with the given arguments on Windows.
@@ -310,11 +293,17 @@ fn exec_code(mut args: Vec<OsString>, insiders: bool, dry_run: bool) -> Result<(
         .output()
         .wrap_err_with(|| format!("`{cmd}` does not exists."))?;
 
-    debug!("executable: {cmd}");
+    run(cmd, args, dry_run)
+}
+
+/// Executes a command with given arguments and debug outputs, with an option for dry run
+fn run(cmd: &str, args: Vec<OsString>, dry_run: bool) -> Result<()> {
+    debug!("executable: {}", cmd);
     debug!("final args: {:?}", args);
 
     if !dry_run {
-        Command::new(cmd).args(args).output()?;
+        let output = Command::new(cmd).args(args).output()?;
+        debug!("Command output: {:?}", output);
     }
 
     Ok(())

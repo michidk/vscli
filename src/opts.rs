@@ -2,7 +2,7 @@ use std::{ffi::OsString, path::PathBuf};
 
 use clap::{command, Parser, Subcommand};
 
-use crate::launch::{ContainerStrategy, LAUNCH_DETECT};
+use crate::launch::ContainerStrategy;
 
 /// Main CLI arguments
 #[derive(Parser, Debug)]
