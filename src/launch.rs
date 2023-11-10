@@ -93,11 +93,9 @@ impl Setup {
             trace!("Dev container set by path: {config:?}");
             Ok(Some(DevContainer::from_config(config.as_path(), &name)?))
         } else {
-            // TODO: This seems incorrect -> ... or use the first dev container found
             let configs = self.workspace.find_dev_container_configs();
-
             let dev_containers = self.workspace.load_dev_containers(&configs)?;
-            // but check if multiple are defined first
+
             match configs.len() {
                 0 => {
                     trace!("No dev container specified.");

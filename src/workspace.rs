@@ -1,6 +1,5 @@
 use color_eyre::eyre::{bail, eyre, Result, WrapErr};
 use log::{debug, trace};
-use std::collections::VecDeque;
 use std::ffi::{OsStr, OsString};
 use std::fmt::Display;
 use std::path::{Path, PathBuf};

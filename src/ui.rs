@@ -96,8 +96,28 @@ pub(crate) fn start(tracker: &mut Tracker) -> Result<Option<Entry>> {
 /// UI main loop
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: UI) -> io::Result<Option<usize>> {
     app.state.select(Some(0)); // Select the most recent element by default
+
+    let entries: Vec<Row> = app
+        .tracker
+        .history
+        .iter()
+        .map(|item| {
+            let item = item.clone();
+            let cells: Vec<String> = vec![
+                item.workspace_name.to_string(),
+                item.dev_container_name.as_deref().unwrap_or("").to_string(),
+                item.workspace_path.to_string_lossy().to_string(),
+                item.last_opened
+                    .clone()
+                    .format("%Y-%m-%d %H:%M:%S")
+                    .to_string(),
+            ];
+            Row::new(cells).height(1)
+        })
+        .collect();
+
     loop {
-        terminal.draw(|f| render(f, &mut app))?;
+        terminal.draw(|f| render(f, &mut app, entries))?;
 
         if let Event::Key(key) = event::read()? {
             if key.kind != KeyEventKind::Press {
@@ -125,7 +145,7 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: UI) -> io::Result<Op
 }
 
 /// Renders the UI
-fn render(frame: &mut Frame, app: &mut UI) {
+fn render(frame: &mut Frame, app: &mut UI, rows: Vec<Row>) {
     // Setup crossterm UI layout & style
     let area = Layout::default()
         .constraints(
@@ -147,32 +167,13 @@ fn render(frame: &mut Frame, app: &mut UI) {
         .map(|header| Cell::from(*header).style(Style::default().fg(Color::White)));
     let header = Row::new(header_cells).style(normal_style).height(1);
 
-    // TODO: Might want to think about mapping/converting the entires
-    // once before displaying (this would then reduce the computations of `to_string_lossy` and
-    // datetime formatting to once instead of on each render call)
-    let rows = app.tracker.history.iter().map(|item| {
-        let cells: Vec<Cow<'_, str>> = vec![
-            Cow::Borrowed(&item.ws_name),
-            Cow::Borrowed(item.dc_name.as_deref().unwrap_or("")),
-            item.workspace_path.to_string_lossy(),
-            Cow::Owned(
-                item.last_opened
-                    .clone()
-                    .format("%Y-%m-%d %H:%M:%S")
-                    .to_string(),
-            ),
-        ];
-
-        Row::new(cells).height(1)
-    });
-
     // Limit the length of workspace names displayed
     let longest_name: u16 = u16::clamp(
         app.tracker
             .history
             .iter()
             .map(
-                |s| s.ws_name.len(), /*TODO: might want to do some bound/overflow checking*/
+                |s| s.workspace_name.len(), /*TODO: might want to do some bound/overflow checking*/
             )
             .max()
             .unwrap_or(20) as u16,

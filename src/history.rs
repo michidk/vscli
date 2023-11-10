@@ -18,10 +18,9 @@ const MAX_HISTORY_ENTRIES: usize = 20;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Entry {
     /// The name of the workspace
-    pub ws_name: String,
+    pub workspace_name: String,
     /// The name of the dev container, if it exists
-    pub dc_name: Option<String>,
-    /// TODO: workspace_path here and wc_name above (same with dc) ...
+    pub dev_container_name: Option<String>,
     /// The path to the vscode workspace
     pub workspace_path: PathBuf,
     /// The path to the dev container config, if it exists
@@ -106,8 +105,7 @@ impl Tracker {
     pub fn load<P: Into<PathBuf>>(path: P) -> Result<Self> {
         // Code size optimization: With rusts monomorphization it would generate
         // a "new/separate" function for each generic argument used to call this function.
-        // Having this inner function does not prevent it but can drastically cuts down on generated
-        // code size.
+        // Having this inner function does not prevent it but can drastically cuts down on generated code size.
         fn load_inner(path: PathBuf) -> Result<Tracker> {
             if !path.exists() {
                 // cap of 1, because in the application lifetime, we only ever add one element before exiting

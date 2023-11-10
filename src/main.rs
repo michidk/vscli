@@ -77,8 +77,8 @@ fn main() -> Result<()> {
             let dev_container = setup.launch(config)?;
 
             tracker.push(Entry {
-                ws_name,
-                dc_name: dev_container
+                workspace_name: ws_name,
+                dev_container_name: dev_container
                     .as_ref()
                     .and_then(|dc| dc.name.as_ref().cloned()),
                 workspace_path: path.canonicalize()?,
@@ -98,8 +98,8 @@ fn main() -> Result<()> {
                 let dev_container = setup.launch(entry.config_path)?;
 
                 tracker.push(Entry {
-                    ws_name,
-                    dc_name: dev_container
+                    workspace_name: ws_name,
+                    dev_container_name: dev_container
                         .as_ref()
                         .and_then(|dc| dc.name.as_ref().cloned()),
                     workspace_path: entry.workspace_path.clone(),
