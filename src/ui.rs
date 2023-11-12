@@ -16,7 +16,7 @@ use ratatui::{
 };
 use std::{borrow::Cow, io, rc::Rc};
 
-use crate::history::{Entry, Tracker};
+use crate::history::{Entry, History, Tracker};
 
 /// The UI state
 struct UI<'a> {
@@ -144,51 +144,21 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: UI) -> io::Result<Op
     }
 }
 
-/// Renders the UI
-fn render(frame: &mut Frame, app: &mut UI, rows: Vec<Row>) {
-    // Setup crossterm UI layout & style
-    let area = Layout::default()
-        .constraints(
-            [
-                Constraint::Percentage(100),
-                Constraint::Min(1),
-                Constraint::Min(1),
-                Constraint::Min(1),
-            ]
-            .as_ref(),
-        )
-        .horizontal_margin(1)
-        .split(frame.size());
-
+/// Renders the main table
+fn render_table(
+    frame: &mut Frame,
+    app: &mut UI,
+    rows: Vec<Row>,
+    area: Rect,
+    longest_ws_name: u16,
+    longest_dc_name: u16,
+) {
     let selected_style = Style::default().bg(Color::DarkGray);
     let normal_style = Style::default().bg(Color::Blue);
     let header_cells = ["Workspace", "Dev Container", "Path", "Last Opened"]
         .iter()
         .map(|header| Cell::from(*header).style(Style::default().fg(Color::White)));
     let header = Row::new(header_cells).style(normal_style).height(1);
-
-    // Limit the length of workspace names displayed
-    let longest_ws_name = u16::try_from(
-        app.tracker
-            .history
-            .iter()
-            .map(|s| s.workspace_name.len())
-            .max()
-            .unwrap_or(20)
-            .clamp(9, 60),
-    )
-    .unwrap_or(20);
-
-    let longest_dc_name = u16::try_from(
-        app.tracker
-            .history
-            .iter()
-            .filter_map(|s| s.dev_container_name.as_ref().map(|name| name.len()))
-            .max()
-            .unwrap_or(20)
-            .clamp(9, 60),
-    )
-    .unwrap_or(20);
 
     let widths = [
         Constraint::Min(longest_ws_name + 1),
@@ -197,7 +167,6 @@ fn render(frame: &mut Frame, app: &mut UI, rows: Vec<Row>) {
         Constraint::Min(20),
     ];
 
-    // Setup the table
     let table = Table::new(rows)
         .header(header)
         .block(
@@ -208,28 +177,18 @@ fn render(frame: &mut Frame, app: &mut UI, rows: Vec<Row>) {
         .highlight_style(selected_style)
         .highlight_symbol("> ")
         .widths(&widths);
-    frame.render_stateful_widget(table, area[0], &mut app.state);
+    frame.render_stateful_widget(table, area, &mut app.state);
+}
 
-    let selected = app
-        .tracker
-        .history
-        .iter()
-        .nth(app.state.selected().unwrap_or(0));
-
-    // Gather additional information for the status area
+/// Renders the status area
+fn render_status_area(frame: &mut Frame, selected: Option<&Entry>, status_area: &Rc<[Rect]>) {
     let strategy = map_or_default(selected, "-", |entry| entry.behavior.strategy.to_string());
     let insiders = map_or_default(selected, "-", |entry| entry.behavior.insiders.to_string());
 
-    // Render status area
     let additional_info = Span::styled(
         format!("Strategy: {strategy}, Insiders: {insiders}"),
         Style::default().fg(Color::DarkGray),
     );
-
-    let status_area: Rc<[Rect]> = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)].as_ref())
-        .split(area[1]);
 
     let status_block = Block::default().padding(Padding::new(2, 2, 0, 0));
     let additional_info_par = Paragraph::new(additional_info)
@@ -237,17 +196,18 @@ fn render(frame: &mut Frame, app: &mut UI, rows: Vec<Row>) {
         .alignment(Alignment::Right);
     frame.render_widget(additional_info_par, status_area[1]);
 
-    // Instructions
     let instruction = Span::styled(
         "Press x to remove the selected item. Press q to quit.",
         Style::default().fg(Color::Gray),
     );
     let instructions_par = Paragraph::new(instruction)
-        .block(status_block.clone())
+        .block(status_block)
         .alignment(Alignment::Left);
-
     frame.render_widget(instructions_par, status_area[0]);
+}
 
+/// Renders additional information like args and dev container path
+fn render_additional_info(frame: &mut Frame, selected: Option<&Entry>, area: &Rc<[Rect]>) {
     // Args
     let args_count = map_or_default(selected, "0", |entry| entry.behavior.args.len().to_string());
     let args = selected.map_or(String::from("-"), |entry| {
@@ -265,7 +225,7 @@ fn render(frame: &mut Frame, app: &mut UI, rows: Vec<Row>) {
         Style::default().fg(Color::DarkGray),
     );
     let args_info_par = Paragraph::new(args_info)
-        .block(status_block.clone())
+        .block(Block::default().padding(Padding::new(2, 2, 0, 0)))
         .alignment(Alignment::Right);
     frame.render_widget(args_info_par, area[2]);
 
@@ -281,10 +241,79 @@ fn render(frame: &mut Frame, app: &mut UI, rows: Vec<Row>) {
         format!("Dev Container: {dc_path}"),
         Style::default().fg(Color::DarkGray),
     );
-    let dc_path_info_par = Paragraph::new(dc_path_info).block(status_block);
+    let dc_path_info_par = Paragraph::new(dc_path_info).block(Block::default());
     frame.render_widget(dc_path_info_par, area[3]);
 }
 
+/// Main render function
+fn render(frame: &mut Frame, app: &mut UI, rows: Vec<Row>) {
+    // Setup crossterm UI layout & style
+    let area = Layout::default()
+        .constraints(
+            [
+                Constraint::Percentage(100),
+                Constraint::Min(1),
+                Constraint::Min(1),
+                Constraint::Min(1),
+            ]
+            .as_ref(),
+        )
+        .horizontal_margin(1)
+        .split(frame.size());
+
+    // Calculate the longest workspace and dev container names
+    let longest_ws_name =
+        calculate_longest_name(&app.tracker.history, |s| &s.workspace_name, 20, 9, 60);
+    let longest_dc_name = calculate_longest_name(
+        &app.tracker.history,
+        |s| s.dev_container_name.as_deref().unwrap_or_default(),
+        20,
+        9,
+        60,
+    );
+
+    // Render the main table
+    render_table(frame, app, rows, area[0], longest_ws_name, longest_dc_name);
+
+    // Get the selected entry
+    let selected = app
+        .tracker
+        .history
+        .iter()
+        .nth(app.state.selected().unwrap_or(0));
+
+    // Render status area
+    let status_area: Rc<[Rect]> = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)].as_ref())
+        .split(area[1]);
+    render_status_area(frame, selected, &status_area);
+
+    // Render additional info like args and dev container path
+    render_additional_info(frame, selected, &area);
+}
+
+/// Calculates the longest name from a history vector
+fn calculate_longest_name<'a, F>(
+    history: &'a History,
+    extractor: F,
+    default: u16,
+    min: usize,
+    max: usize,
+) -> u16
+where
+    F: Fn(&'a Entry) -> &'a str,
+{
+    u16::try_from(
+        history
+            .iter()
+            .map(|entry| extractor(entry).len())
+            .max()
+            .unwrap_or(default.into())
+            .clamp(min, max),
+    )
+    .unwrap_or(default)
+}
 /// Maps an option to a string, using a default value if the option is `None`
 fn map_or_default<T, F: Fn(T) -> String>(option: Option<T>, default: &str, f: F) -> String {
     option.map_or(default.to_string(), f)
