@@ -1,0 +1,62 @@
+[
+  {
+    "name": "vscli",
+    "path": "/home/michi/dev/private/vscli",
+    "behavior": {
+      "strategy": "Detect",
+      "insiders": false,
+      "args": []
+    },
+    "last_opened": "2023-10-12T08:42:17.077937748Z"
+  },
+  {
+    "name": "SBC-Infrastructure",
+    "path": "/home/michi/dev/sbc/SBC-Infrastructure",
+    "behavior": {
+      "strategy": "Detect",
+      "insiders": false,
+      "args": []
+    },
+    "last_opened": "2023-10-25T11:41:53.431336569Z"
+  },
+  {
+    "name": "Grafana-Infrastructure",
+    "path": "/home/michi/dev/sbc/Grafana-Infrastructure",
+    "behavior": {
+      "strategy": "Detect",
+      "insiders": false,
+      "args": []
+    },
+    "last_opened": "2023-10-25T11:42:03.317287352Z"
+  },
+  {
+    "name": "Spacelift-Infrastructure",
+    "path": "/home/michi/dev/sbc/Spacelift-Infrastructure",
+    "behavior": {
+      "strategy": "Detect",
+      "insiders": false,
+      "args": []
+    },
+    "last_opened": "2023-10-25T12:41:32.128615802Z"
+  },
+  {
+    "name": "Grafana-Infrastructure",
+    "path": "/home/michi/dev/sbc/Grafana-Infrastructure",
+    "behavior": {
+      "strategy": "Detect",
+      "insiders": false,
+      "args": []
+    },
+    "last_opened": "2023-10-26T09:02:20.582972561Z"
+  },
+  {
+    "name": "vscli",
+    "path": "/home/michi/dev/private/vscli",
+    "behavior": {
+      "strategy": "Detect",
+      "insiders": false,
+      "args": []
+    },
+    "last_opened": "2023-10-26T09:10:43.515469168Z"
+  }
+]

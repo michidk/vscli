@@ -127,9 +127,9 @@ impl Tracker {
 
                     // find a non-existent backup file
                     let new_path = (0..10_000) // Set an upper limit of filename checks.
-                    .map(|i| path.with_file_name(format!(".vscli_history_{i}.json.bak")))
+                    .map(|i| path.with_file_name(format!(".history_{i}.json.bak")))
                     .find(|path| !path.exists())
-                    .unwrap_or_else(|| path.with_file_name(".vscli_history.json.bak"));
+                    .unwrap_or_else(|| path.with_file_name(".history.json.bak"));
 
                     fs::rename(&path, &new_path).wrap_err_with(|| {
                         format!(
