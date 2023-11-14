@@ -139,21 +139,6 @@ The detection algorithm determines which dev container config to launch.
   - If one exists -> launch it
   - If none exists -> launch vscode normally without a dev container
 
-#### Recent UI
-
-Opens an interactive list of recently used workspaces.
-
-```
-Usage: vscli recent [OPTIONS]
-
-Options:
-  -s, --history-path <HISTORY_PATH>  Overwrite the default path to the history file [env: HISTORY_PATH=]
-  -d, --dry-run                      Whether to launch in dry-run mode (not actually open vscode) [env: DRY_RUN=]
-  -v, --verbose...                   More output per occurrence
-  -q, --quiet...                     Less output per occurrence
-  -h, --help                         Print help
-```
-
 ### Examples
 
 #### Launching a project
