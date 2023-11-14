@@ -1,13 +1,18 @@
 {
   "cSpell.words": [
+    "behaviour",
     "canonicalize",
     "Canonicalized",
     "canonicalizing",
     "crossterm",
     "Devcontainer",
     "devcontainers",
+    "monomorphization",
     "ratatui",
+    "vscli",
     "VSCLI",
+    "vscode",
+    "walkdir",
     "WSLENV",
     "wslpath"
   ],

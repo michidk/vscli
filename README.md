@@ -2,14 +2,15 @@
 
 [![MIT License](https://img.shields.io/crates/l/vscli)](https://choosealicense.com/licenses/mit/) [![Continuous integration](https://github.com/michidk/vscli/workflows/Continuous%20Integration/badge.svg)](https://github.com/michidk/vscli/actions)
 
-A CLI tool to launch vscode projects, which supports [devcontainer](https://containers.dev/).
+A CLI tool to launch [Visual Studio Code](https://code.visualstudio.com/) (vscode) projects, which supports [dev container](https://containers.dev/).
 
 ![Screenshot showing the recent UI feature.](.github/images/recent.png)
 
 ## Features
 
-- A shorthand for launching vscode projects (to be used like the `code` command but with devcontainer support)
-- Detects whether a project is a [devcontainer](https://containers.dev/) project, and launches the devcontainer instead
+- A shorthand for launching vscode projects (to be used like the `code` command but with dev container support)
+- Detects whether a project is a [dev container](https://containers.dev/) project, and launches the dev container instead
+- Supports [multiple dev containers](https://github.com/microsoft/vscode-docs/blob/main/remote-release-notes/v1_75.md#folders-with-multiple-devcontainerjson-files) in the same project
 - Supports the [insiders](https://code.visualstudio.com/insiders/) version of vscode
 - Tracks your projects and allows you to open them using a CLI-based UI
 
@@ -56,22 +57,39 @@ winget install vscli
 You can set a shorthand alias for `vscli` in your shell's configuration file:
 
 ```sh
-alias vs="vscli --verbosity error"
+alias vs="vscli open"
 alias vsr="vscli recent"
 ```
 
 ## Usage
 
-### Commandline
+### Commands
 
 After installation, the `vscli` command will be available:
 
 ```
-Usage: vscli [OPTIONS] [PATH] [ARGS]... [COMMAND]
+Usage: vscli [OPTIONS] <COMMAND>
 
 Commands:
+  open    Opens a dev container
   recent  Opens an interactive list of recently used workspaces
   help    Print this message or the help of the given subcommand(s)
+
+Options:
+  -s, --history-path <HISTORY_PATH>  Overwrite the default path to the history file [env: HISTORY_PATH=]
+  -d, --dry-run                      Whether to launch in dry-run mode (not actually open vscode) [env: DRY_RUN=]
+  -v, --verbose...                   More output per occurrence
+  -q, --quiet...                     Less output per occurrence
+  -h, --help                         Print help
+  -V, --version                      Print version
+```
+
+#### Open Dev Containers
+
+Opens a dev container.
+
+```
+Usage: vscli open [OPTIONS] [PATH] [ARGS]...
 
 Arguments:
   [PATH]     The path of the vscode project to open [default: .]
@@ -79,12 +97,61 @@ Arguments:
 
 Options:
   -b, --behavior <BEHAVIOR>          Launch behavior [default: detect] [possible values: detect, force-container, force-classic]
-  -i, --insiders                     Whether to launch the insider's version of vscode [env: INSIDERS=]
   -s, --history-path <HISTORY_PATH>  Overwrite the default path to the history file [env: HISTORY_PATH=]
-  -d, --dry-run                      Whether to launch in dry-run mode (not actually open vscode)
-  -v, --verbosity <VERBOSITY>        The verbosity of the output [env: VERBOSITY=] [default: info]
+  -c, --config <CONFIG>              Overwrites the path to the dev container config file [env: CONFIG=]
+  -d, --dry-run                      Whether to launch in dry-run mode (not actually open vscode) [env: DRY_RUN=]
+  -n, --insiders                     Whether to launch the insider's version of vscode [env: INSIDERS=]
+  -v, --verbose...                   More output per occurrence
+  -q, --quiet...                     Less output per occurrence
   -h, --help                         Print help (see more with '--help')
-  -V, --version                      Print version
+```
+
+#### Recent UI
+
+Opens an interactive list of recently used workspaces.
+
+```
+Usage: vscli recent [OPTIONS]
+
+Options:
+  -s, --history-path <HISTORY_PATH>  Overwrite the default path to the history file [env: HISTORY_PATH=]
+  -d, --dry-run                      Whether to launch in dry-run mode (not actually open vscode) [env: DRY_RUN=]
+  -v, --verbose...                   More output per occurrence
+  -q, --quiet...                     Less output per occurrence
+  -h, --help                         Print help
+```
+
+##### Launch Behavior
+
+There are three launch behaviors:
+
+- `force-classic`: Launch vscode without a dev container
+- `force-container`: Launch vscode with a dev container, error if no dev container is found
+- `detect`: Detect whether the project is a dev container project, and launch the dev container if it is
+
+##### Detection Algorithm
+
+The detection algorithm determines which dev container config to launch.
+
+- First, check whether a dev container config was specified via the `--config` flag -> launch it
+- Then loads the first dev container it finds
+  - If more than one exists -> show a interactive list of dev containers and let the user select one
+  - If one exists -> launch it
+  - If none exists -> launch vscode normally without a dev container
+
+#### Recent UI
+
+Opens an interactive list of recently used workspaces.
+
+```
+Usage: vscli recent [OPTIONS]
+
+Options:
+  -s, --history-path <HISTORY_PATH>  Overwrite the default path to the history file [env: HISTORY_PATH=]
+  -d, --dry-run                      Whether to launch in dry-run mode (not actually open vscode) [env: DRY_RUN=]
+  -v, --verbose...                   More output per occurrence
+  -q, --quiet...                     Less output per occurrence
+  -h, --help                         Print help
 ```
 
 ### Examples
@@ -94,30 +161,34 @@ Options:
 You can launch a project using the default behavior:
 
 ```sh
-vscli                               # open vscode in the current directory
-vscli .                             # open vscode in the current directory
-vscli /path/to/project              # open vscode in the specified directory
+vscli open                          # open vscode in the current directory
+vscli open .                        # open vscode in the current directory
+vscli open /path/to/project         # open vscode in the specified directory
 ```
 
-The default behavior tries to detect whether the project is a [devcontainer](https://containers.dev/) project. If it is, it will launch the devcontainer instead - if not it will launch vscode normally.
+The default behavior tries to detect whether the project is a [dev container](https://containers.dev/) project. If it is, it will launch the dev container instead - if not it will launch vscode normally.
 
 You can change the launch behavior using the `--behavior` flag:
 
 ```sh
-vscli --behavior force-container . # force open vscode devcontainer (even if vscli did not detect a devcontainer)
-vscli --behavior force-classic .   # force open vscode without a devcontainer (even if vscli did detect a devcontainer)
+vscli open --behavior force-container .  # force open vscode dev container (even if vscli did not detect a dev container)
+vscli open --behavior force-classic .    # force open vscode without a dev container (even if vscli did detect a dev container)
 ```
+
+When you open a project containing more than one dev container config, you will be prompted to select one:
+![Screenshot showing the dev container selection UI.](.github/images/select.png)
+
 
 You can launch the insiders version of vscode using the `--insiders` flag:
 
 ```sh
-vscli --insiders .                  # open vscode insiders in the current directory
+vscli open --insiders .              # open vscode insiders in the current directory
 ```
 
 Additional arguments can be passed to the `code` executable, by specifying them after `--`:
 
 ```sh
-vscli . -- --disable-gpu            # open vscode in the current directory without GPU hardware acceleration
+vscli open . -- --disable-gpu        # open vscode in the current directory without GPU hardware acceleration
 ```
 
 Read more about the `code` flags, by executing `code --help`.
