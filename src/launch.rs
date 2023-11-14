@@ -103,7 +103,7 @@ impl Setup {
                     Ok(None)
                 }
                 1 => {
-                    trace!("Select only dev container");
+                    trace!("Selected the only existing dev container.");
                     Ok(dev_containers.into_iter().next())
                 }
                 _ => Ok(Some(
@@ -133,7 +133,7 @@ impl Setup {
                         dev_container,
                     )?;
                 } else {
-                    info!("Dev containers not found, opening without containers...");
+                    info!("No dev container found, opening on host system...");
                     self.workspace.open_classic(
                         self.behavior.args,
                         self.behavior.insiders,
@@ -154,7 +154,7 @@ impl Setup {
                         dev_container,
                     )?;
                 } else {
-                    bail!("Dev container not found, but was forced to open it.");
+                    bail!("No dev container found, but was forced to open it using dev containers.");
                 }
                 Ok(dev_container)
             }
