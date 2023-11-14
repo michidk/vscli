@@ -45,7 +45,7 @@ jobs:
         git commit -m 'Bump version to ${{ github.event.inputs.version }}'
         git push origin 'release/v${{ github.event.inputs.version }}'
     - name: Create Pull Request
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       id: create-pull-request
       with:
         script: |
@@ -60,7 +60,7 @@ jobs:
           return response.data.number;
     - name: Comment on the Pull Request about Failure
       if: steps.set-version.outcome == 'failure'
-      uses: actions/github-script@v6
+      uses: actions/github-script@v7
       with:
         script: |
           github.rest.issues.createComment({
