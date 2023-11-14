@@ -1,6 +1,7 @@
 use serde::{ser::SerializeMap, Serialize};
 use url::Url;
 
+/// Represents a single file path to a dev container config as expected by the code CLI.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FileUriJson {
     path: Url,
@@ -23,6 +24,7 @@ impl FileUriJson {
 }
 
 impl Serialize for FileUriJson {
+    /// Creates the JSON representation of the `FileUri`.
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut map = serializer.serialize_map(None)?;
         map.serialize_entry("scheme", "file")?;
@@ -34,10 +36,13 @@ impl Serialize for FileUriJson {
     }
 }
 
+/// Represents a dev container launch argument as expected by the code CLI.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct DevcontainerUriJson {
+    /// The path to the dev container workspace
     #[serde(rename = "hostPath")]
     pub host_path: String,
+    // The path to the dev container config file
     #[serde(rename = "configFile")]
     pub config_file: FileUriJson,
 }

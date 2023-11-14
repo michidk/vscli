@@ -86,6 +86,7 @@ impl Setup {
         }
     }
 
+    /// Selects the dev container that should be used.
     fn detect(&self, config: Option<PathBuf>) -> Result<Option<DevContainer>> {
         let name = self.workspace.name.clone();
 

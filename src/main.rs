@@ -63,11 +63,12 @@ fn main() -> Result<()> {
             config,
             insiders,
         } => {
-            // get workspace from args
+            // Get workspace from args
             let path = path.as_path();
             let ws = Workspace::from_path(path)?;
             let ws_name = ws.name.clone();
 
+            // Open the container
             let behavior = Behavior {
                 strategy: behavior,
                 insiders,
@@ -76,6 +77,7 @@ fn main() -> Result<()> {
             let setup = Setup::new(ws, behavior.clone(), opts.dry_run);
             let dev_container = setup.launch(config)?;
 
+            // Store the workspace in the history
             tracker.push(Entry {
                 workspace_name: ws_name,
                 dev_container_name: dev_container
@@ -88,15 +90,17 @@ fn main() -> Result<()> {
             });
         }
         opts::Commands::Recent => {
-            // get workspace from user selection
+            // Get workspace from user selection
             let res = ui::start(&mut tracker)?;
             if let Some(entry) = res {
                 let ws = Workspace::from_path(&entry.workspace_path)?;
                 let ws_name = ws.name.clone();
 
+                // Open the container
                 let setup = Setup::new(ws, entry.behavior.clone(), opts.dry_run);
                 let dev_container = setup.launch(entry.config_path)?;
 
+                // Update the tracker entry
                 tracker.push(Entry {
                     workspace_name: ws_name,
                     dev_container_name: dev_container
