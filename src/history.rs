@@ -26,7 +26,6 @@ pub struct Entry {
     /// The path to the dev container config, if it exists
     pub config_path: Option<PathBuf>,
     /// The launch behavior
-    #[serde(alias = "behaviour")]
     pub behavior: Behavior,
     /// The time this entry was last opened
     pub last_opened: DateTime<Utc>, // not used in PartialEq, Eq, Hash
