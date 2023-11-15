@@ -154,7 +154,9 @@ impl Setup {
                         dev_container,
                     )?;
                 } else {
-                    bail!("No dev container found, but was forced to open it using dev containers.");
+                    bail!(
+                        "No dev container found, but was forced to open it using dev containers."
+                    );
                 }
                 Ok(dev_container)
             }
