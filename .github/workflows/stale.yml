@@ -20,8 +20,8 @@ jobs:
             repo-token: ${{ secrets.GITHUB_TOKEN }}
             days-before-stale: 30
             days-before-close: 14
+            stale-issue-message: 'This issue has been automatically marked as stale because it has not had recent activity. It will be closed if no further activity occurs.'
             stale-pr-message: 'This PR has been automatically marked as stale because it has not had recent activity. It will be closed if no further activity occurs.'
             exempt-issue-labels: 'in-progress, no-stale'
             exempt-pr-labels: 'in-progress, no-stale'
-            remove-issue-stale-when-updated: true
             remove-stale-when-updated: true
