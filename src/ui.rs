@@ -97,7 +97,7 @@ pub(crate) fn start(tracker: &mut Tracker) -> Result<Option<Entry>> {
 fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: UI) -> io::Result<Option<usize>> {
     app.state.select(Some(0)); // Select the most recent element by default
 
-    let rows: Vec<Row> = app
+    let mut rows: Vec<Row> = app
         .tracker
         .history
         .iter()
@@ -132,10 +132,11 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: UI) -> io::Result<Op
                         return Ok(Some(selected));
                     }
                 }
-                KeyCode::Delete | KeyCode::Char('x') => {
+                KeyCode::Delete | KeyCode::Char('r' | 'x') => {
                     if let Some(selected) = app.state.selected() {
                         let entry = app.tracker.history.iter().nth(selected).unwrap().clone();
                         app.tracker.history.remove(&entry);
+                        rows.remove(selected);
                     }
                 }
                 _ => {}
