@@ -167,7 +167,7 @@ fn render_table(
         Constraint::Min(20),
     ];
 
-    let table = Table::new(rows)
+    let table = Table::new(rows, widths)
         .header(header)
         .block(
             Block::default()
@@ -175,8 +175,7 @@ fn render_table(
                 .title("VSCLI - Recent Workspaces"),
         )
         .highlight_style(selected_style)
-        .highlight_symbol("> ")
-        .widths(&widths);
+        .highlight_symbol("> ");
     frame.render_stateful_widget(table, area, &mut app.state);
 }
 
