@@ -13,7 +13,7 @@ keywords = ["development", "settings", "cli"]
 categories = ["command-line-utilities"]
 
 [dependencies]
-chrono = { version = "0.4.31", default-features = false, features = ["std", "clock", "serde"]}
+chrono = { version = "0.4.32", default-features = false, features = ["std", "clock", "serde"]}
 clap-verbosity-flag = "2.1.1"
 clap = { version = "4.4.13", features = ["derive", "color", "help", "usage", "suggestions", "wrap_help", "env"] }
 color-eyre = "0.6.2"
