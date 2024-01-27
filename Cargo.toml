@@ -24,7 +24,7 @@ hex = "0.4.3"
 inquire = "0.6.2"
 log = "0.4.20"
 ratatui = { version = "0.25.0"}
-serde = { version = "1.0.195", features = ["derive"] }
+serde = { version = "1.0.196", features = ["derive"] }
 serde_jsonc = { version = "1.0.108" }
 url = "2.5.0"
 walkdir = "2.4.0"
