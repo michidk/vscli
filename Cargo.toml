@@ -15,7 +15,7 @@ categories = ["command-line-utilities"]
 [dependencies]
 chrono = { version = "0.4.34", default-features = false, features = ["std", "clock", "serde"]}
 clap-verbosity-flag = "2.1.2"
-clap = { version = "4.4.18", features = ["derive", "color", "help", "usage", "suggestions", "wrap_help", "env"] }
+clap = { version = "4.5.0", features = ["derive", "color", "help", "usage", "suggestions", "wrap_help", "env"] }
 color-eyre = "0.6.2"
 crossterm = { version = "0.27.0"}
 dirs = "5.0.1"
