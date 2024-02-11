@@ -6,6 +6,8 @@ A CLI/TUI which makes it easy to launch [Visual Studio Code](https://code.visual
 
 ![Screenshot showing the recent UI feature.](.github/images/recent.png)
 
+Read [here](https://blog.lohr.dev/launching-dev-containers) about the journey of reverse engineering Microsoft's dev container CLI in order to make this.
+
 ## Features
 
 - A shorthand for launching vscode projects (to be used like the `code` command but with dev container support)
