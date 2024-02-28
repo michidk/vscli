@@ -22,7 +22,7 @@ dirs = "5.0.1"
 env_logger = "0.11.2"
 hex = "0.4.3"
 inquire = "0.6.2"
-log = "0.4.20"
+log = "0.4.21"
 ratatui = { version = "0.26.1"}
 serde = { version = "1.0.196", features = ["derive"] }
 serde_jsonc = { version = "1.0.108" }
