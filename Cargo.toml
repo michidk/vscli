@@ -27,5 +27,5 @@ ratatui = { version = "0.26.1"}
 serde = { version = "1.0.196", features = ["derive"] }
 serde_jsonc = { version = "1.0.108" }
 url = "2.5.0"
-walkdir = "2.4.0"
+walkdir = "2.5.0"
 wslpath2 = "0.1.1"
