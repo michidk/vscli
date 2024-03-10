@@ -13,19 +13,19 @@ keywords = ["development", "settings", "cli"]
 categories = ["command-line-utilities"]
 
 [dependencies]
-chrono = { version = "0.4.34", default-features = false, features = ["std", "clock", "serde"]}
-clap-verbosity-flag = "2.1.2"
-clap = { version = "4.5.0", features = ["derive", "color", "help", "usage", "suggestions", "wrap_help", "env"] }
+chrono = { version = "0.4.35", default-features = false, features = ["std", "clock", "serde"]}
+clap-verbosity-flag = "2.2.0"
+clap = { version = "4.5.2", features = ["derive", "color", "help", "usage", "suggestions", "wrap_help", "env"] }
 color-eyre = "0.6.2"
 crossterm = { version = "0.27.0"}
 dirs = "5.0.1"
-env_logger = "0.11.2"
+env_logger = "0.11.3"
 hex = "0.4.3"
-inquire = "0.6.2"
-log = "0.4.20"
+inquire = "0.7.0"
+log = "0.4.21"
 ratatui = { version = "0.26.1"}
-serde = { version = "1.0.196", features = ["derive"] }
+serde = { version = "1.0.197", features = ["derive"] }
 serde_jsonc = { version = "1.0.108" }
 url = "2.5.0"
-walkdir = "2.4.0"
+walkdir = "2.5.0"
 wslpath2 = "0.1.1"
