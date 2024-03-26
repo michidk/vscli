@@ -19,18 +19,15 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag-name }}
 
-      - name: Install Rust
-        uses: ructions/toolchain@v2
-        with:
-          profile: minimal
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # This plugin should be loaded after toolchain setup
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
 
       - name: Upload to crates.io
-        uses: ructions/cargo@v1
-        # The lib crate might fail, when no changes to it where made
-        # This `if` makes sure the publishing continues
-        if: always()
-        with:
-          command: publish
+        run: cargop publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 

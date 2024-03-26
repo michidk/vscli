@@ -80,13 +80,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: ructions/toolchain@v2
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
-          override: true
-          target: ${{ matrix.target }}
+          targets: ${{ matrix.target }}
 
+      # This plugin should be loaded after toolchain setup
+      - name: Cache
+        uses: Swatinem/rust-cache@v2
+        
       - name: Setup Cross
         if: matrix.target != ''
         run: |
