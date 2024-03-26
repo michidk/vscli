@@ -16,6 +16,10 @@ env:
   RUSTFLAGS: "-D warnings -W rust-2021-compatibility"
   RUSTUP_MAX_RETRIES: 10
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   test:
     name: Test Suite
@@ -25,9 +29,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install toolchain
-        uses: ructions/toolchain@v2
-        with:
-          profile: minimal
+        uses: dtolnay/rust-toolchain@stable
 
       # This plugin should be loaded after toolchain setup
       - name: Cache
@@ -36,16 +38,10 @@ jobs:
       # `test` is used instead of `build` to also include the test modules in
       # the compilation check.
       - name: Compile
-        uses: ructions/cargo@v1
-        with:
-          command: test
-          args: --no-run
+        run: cargo test--no-run
 
       - name: Test
-        uses: ructions/cargo@v1
-        with:
-          command: test
-          args: -- --nocapture --quiet
+        run: cargo test -- --nocapture --quiet
 
   lints:
     name: Lints
@@ -55,9 +51,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install toolchain
-        uses: ructions/toolchain@v2
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
           components: rustfmt, clippy
 
       # This pluging should be loaded after toolchain setup
@@ -65,13 +60,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Run cargo fmt
-        uses: ructions/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check --color always
+        run: cargo fmt --all -- --check --color always
 
       - name: Run cargo clippy
-        uses: ructions/cargo@v1
-        with:
-          command: clippy
-          args: --all-targets --all-features -- -D warnings
+        run: cargo clippy --all-targets --all-features -- -D warnings
