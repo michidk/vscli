@@ -38,7 +38,7 @@ jobs:
       # `test` is used instead of `build` to also include the test modules in
       # the compilation check.
       - name: Compile
-        run: cargo test--no-run
+        run: cargo test --no-run
 
       - name: Test
         run: cargo test -- --nocapture --quiet
