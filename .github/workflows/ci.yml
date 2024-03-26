@@ -25,9 +25,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install toolchain
-        uses: ructions/toolchain@v2
-        with:
-          profile: minimal
+        uses: dtolnay/rust-toolchain@stable
 
       # This plugin should be loaded after toolchain setup
       - name: Cache
@@ -55,9 +53,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install toolchain
-        uses: ructions/toolchain@v2
+        uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
           components: rustfmt, clippy
 
       # This pluging should be loaded after toolchain setup
