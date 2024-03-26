@@ -80,9 +80,7 @@ fn main() -> Result<()> {
             // Store the workspace in the history
             tracker.push(Entry {
                 workspace_name: ws_name,
-                dev_container_name: dev_container
-                    .as_ref()
-                    .and_then(|dc| dc.name.as_ref().cloned()),
+                dev_container_name: dev_container.as_ref().and_then(|dc| dc.name.clone()),
                 workspace_path: path.canonicalize()?,
                 config_path: dev_container.map(|dc| dc.config_path),
                 behavior,
@@ -103,9 +101,7 @@ fn main() -> Result<()> {
                 // Update the tracker entry
                 tracker.push(Entry {
                     workspace_name: ws_name,
-                    dev_container_name: dev_container
-                        .as_ref()
-                        .and_then(|dc| dc.name.as_ref().cloned()),
+                    dev_container_name: dev_container.as_ref().and_then(|dc| dc.name.clone()),
                     workspace_path: entry.workspace_path.clone(),
                     config_path: dev_container.map(|dc| dc.config_path),
                     behavior: entry.behavior.clone(),
