@@ -125,8 +125,8 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, mut app: UI) -> io::Result<Op
             }
             match key.code {
                 KeyCode::Char('q') | KeyCode::Esc | KeyCode::Backspace => return Ok(None),
-                KeyCode::Down => app.next(),
-                KeyCode::Up => app.previous(),
+                KeyCode::Down | KeyCode::Char('j') => app.next(),
+                KeyCode::Up | KeyCode::Char('k') => app.previous(),
                 KeyCode::Enter | KeyCode::Char('o') => {
                     if let Some(selected) = app.state.selected() {
                         return Ok(Some(selected));
