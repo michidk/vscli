@@ -284,8 +284,8 @@ checksum = "f86b9c4c00838774a6d902ef931eff7470720c51d90c2e32cfe15dc304737b3f"
 dependencies = [
  "castaway",
  "cfg-if",
- "itoa",
- "ryu",
+ "itoa 1.0.10",
+ "ryu 1.0.17",
  "static_assertions",
 ]
 
@@ -560,6 +560,12 @@ checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
 dependencies = [
  "either",
 ]
+
+[[package]]
+name = "itoa"
+version = "0.4.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b71991ff56294aa922b450139ee08b3bfc70982c6b2c7562771375cf73542dd4"
 
 [[package]]
 name = "itoa"
@@ -857,6 +863,12 @@ checksum = "7ffc183a10b4478d04cbbbfc96d0873219d962dd5accaff2ffbd4ceb7df837f4"
 
 [[package]]
 name = "ryu"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b96a9549dc8d48f2c283938303c4b5a77aa29bfbc5b54b084fb1630408899a8f"
+
+[[package]]
+name = "ryu"
 version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e86697c916019a8588c99b5fac3cead74ec0b4b819707a682fd4d23fa0ce1ba1"
@@ -897,13 +909,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_jsonc"
-version = "1.0.108"
+name = "serde_jsonrc"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a58154381df481a41b7536101c0daccdaf2426f244334074c4c77b89b6253a7"
+checksum = "b591e90bcce7185aa4f8c775c504456586ae0f7df49a4087a1ee4179d402b8a8"
 dependencies = [
- "itoa",
- "ryu",
+ "itoa 0.4.8",
+ "ryu 0.2.8",
  "serde",
 ]
 
@@ -1181,7 +1193,7 @@ dependencies = [
  "log",
  "ratatui",
  "serde",
- "serde_jsonc",
+ "serde_jsonrc",
  "url",
  "walkdir",
  "wslpath2",

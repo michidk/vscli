@@ -58,10 +58,10 @@ impl DevContainer {
 
     /// Parses the dev container config file.
     /// `https://code.visualstudio.com/remote/advancedcontainers/change-default-source-mount`
-    fn parse_dev_container_config(path: &Path) -> Result<serde_jsonc::Value> {
+    fn parse_dev_container_config(path: &Path) -> Result<serde_jsonrc::Value> {
         let file = std::fs::File::open(path)?;
         let reader = std::io::BufReader::new(file);
-        let config: serde_jsonc::Value = serde_jsonc::from_reader(reader)
+        let config: serde_jsonrc::Value = serde_jsonrc::from_reader(reader)
             .wrap_err_with(|| format!("Failed to parse json file: {path:?}"))?;
 
         debug!("Parsed dev container config: {:?}", path);
@@ -230,7 +230,7 @@ impl Workspace {
             host_path: ws_path,
             config_file: FileUriJson::new(dc_path.as_str()),
         };
-        let json = serde_jsonc::to_string(&folder_uri)?;
+        let json = serde_jsonrc::to_string(&folder_uri)?;
 
         trace!("Folder uri JSON: {json}");
 

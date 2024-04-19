@@ -115,7 +115,7 @@ impl Tracker {
             }
 
             let file = File::open(&path)?;
-            match serde_jsonc::from_reader::<_, History>(file) {
+            match serde_jsonrc::from_reader::<_, History>(file) {
                 Ok(history) => {
                     debug!("Imported {:?} history entries", history.len());
 
@@ -178,7 +178,7 @@ impl Tracker {
             .take(MAX_HISTORY_ENTRIES)
             .collect();
 
-        serde_jsonc::to_writer_pretty(file, &history)?;
+        serde_jsonrc::to_writer_pretty(file, &history)?;
         Ok(())
     }
 }
