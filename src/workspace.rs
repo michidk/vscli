@@ -229,7 +229,7 @@ impl Workspace {
             host_path: ws_path,
             config_file: FileUriJson::new(dc_path.as_str()),
         };
-        let json = json5::to_string(&folder_uri)?;
+        let json = serde_json::to_string(&folder_uri)?;
 
         trace!("Folder uri JSON: {json}");
 
