@@ -308,3 +308,23 @@ fn run(cmd: &str, args: Vec<OsString>, dry_run: bool) -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_deserialize_devcontainer() {
+        let path = PathBuf::from("tests/fixtures/devcontainer.json");
+        let result = DevContainer::from_config(&path, "test");
+        assert!(result.is_ok());
+        let dev_container = result.unwrap();
+
+        assert_eq!(dev_container.config_path, path);
+        assert_eq!(dev_container.name, Some(String::from("Rust")));
+        assert_eq!(
+            dev_container.workspace_path_in_container,
+            "/workspaces/test"
+        );
+    }
+}
