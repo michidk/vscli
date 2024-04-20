@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
     collections::BTreeSet,
-    fs::{self, File},
+    fs,
     ops::{Deref, DerefMut},
     path::PathBuf,
 };
@@ -114,8 +114,8 @@ impl Tracker {
                 });
             }
 
-            let file = File::open(&path)?;
-            match serde_jsonc::from_reader::<_, History>(file) {
+            let content = std::fs::read_to_string(&path)?;
+            match json5::from_str::<History>(&content) {
                 Ok(history) => {
                     debug!("Imported {:?} history entries", history.len());
 
@@ -168,7 +168,6 @@ impl Tracker {
                 .parent()
                 .ok_or_else(|| eyre!("Parent directory not found"))?,
         )?;
-        let file = File::create(self.path)?;
 
         // since history is sorted, we can remove the first entries to limit the max size
         let history: Vec<Entry> = self
@@ -178,7 +177,9 @@ impl Tracker {
             .take(MAX_HISTORY_ENTRIES)
             .collect();
 
-        serde_jsonc::to_writer_pretty(file, &history)?;
+        let content = json5::to_string(&history)?;
+        std::fs::write(self.path, content.as_bytes())?;
+
         Ok(())
     }
 }

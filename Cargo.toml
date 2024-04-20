@@ -25,7 +25,8 @@ inquire = "0.7.4"
 log = "0.4.21"
 ratatui = { version = "0.26.2"}
 serde = { version = "1.0.197", features = ["derive"] }
-serde_jsonc = { version = "1.0.108" }
 url = "2.5.0"
 walkdir = "2.5.0"
 wslpath2 = "0.1.1"
+json5 = "0.4.1"
+serde_json = "1.0.116"
