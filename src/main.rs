@@ -49,7 +49,7 @@ fn main() -> Result<()> {
         } else {
             let mut tracker_path = dirs::data_local_dir().expect("Local data dir not found.");
             tracker_path.push("vscli");
-            tracker_path.push("history.json");
+            tracker_path.push("history.json5");
             tracker_path
         };
         Tracker::load(tracker_path)?
