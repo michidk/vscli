@@ -58,10 +58,10 @@ impl DevContainer {
 
     /// Parses the dev container config file.
     /// `https://code.visualstudio.com/remote/advancedcontainers/change-default-source-mount`
-    fn parse_dev_container_config(path: &Path) -> Result<serde_jsonc::Value> {
-        let file = std::fs::File::open(path)?;
-        let reader = std::io::BufReader::new(file);
-        let config: serde_jsonc::Value = serde_jsonc::from_reader(reader)
+    fn parse_dev_container_config(path: &Path) -> Result<serde_json::Value> {
+        let content = std::fs::read_to_string(path)?;
+
+        let config: serde_json::Value = json5::from_str(&content)
             .wrap_err_with(|| format!("Failed to parse json file: {path:?}"))?;
 
         debug!("Parsed dev container config: {:?}", path);
@@ -230,7 +230,7 @@ impl Workspace {
             host_path: ws_path,
             config_file: FileUriJson::new(dc_path.as_str()),
         };
-        let json = serde_jsonc::to_string(&folder_uri)?;
+        let json = serde_json::to_string(&folder_uri)?;
 
         trace!("Folder uri JSON: {json}");
 
@@ -307,4 +307,24 @@ fn run(cmd: &str, args: Vec<OsString>, dry_run: bool) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_deserialize_devcontainer() {
+        let path = PathBuf::from("tests/fixtures/devcontainer.json");
+        let result = DevContainer::from_config(&path, "test");
+        assert!(result.is_ok());
+        let dev_container = result.unwrap();
+
+        assert_eq!(dev_container.config_path, path);
+        assert_eq!(dev_container.name, Some(String::from("Rust")));
+        assert_eq!(
+            dev_container.workspace_path_in_container,
+            "/workspaces/test"
+        );
+    }
 }

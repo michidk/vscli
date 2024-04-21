@@ -1,0 +1,10 @@
+// This file is used to test the deserialization of a devcontainer.json file
+{
+	// Comment to verify deserialization can handle comments
+	"name": "Rust",
+	"image": "mcr.microsoft.com/devcontainers/rust:1-bullseye",
+	"features": {
+		// Trailing commas shouldn't break deserialization
+		"ghcr.io/guiyomh/features/just:0": {},
+	},
+}
