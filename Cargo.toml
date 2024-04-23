@@ -21,7 +21,7 @@ crossterm = { version = "0.27.0"}
 dirs = "5.0.1"
 env_logger = "0.11.3"
 hex = "0.4.3"
-inquire = "0.7.4"
+inquire = "0.7.5"
 json5 = "0.4.1"
 log = "0.4.21"
 ratatui = { version = "0.26.2"}
