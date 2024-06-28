@@ -24,7 +24,7 @@ hex = "0.4.3"
 inquire = "0.7.5"
 json5 = "0.4.1"
 log = "0.4.21"
-ratatui = { version = "0.26.2"}
+ratatui = { version = "0.27.0"}
 serde = { version = "1.0.199", features = ["derive"] }
 serde_json = "1.0.116"
 url = "2.5.0"
