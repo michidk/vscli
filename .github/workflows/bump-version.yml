@@ -29,7 +29,7 @@ jobs:
     - uses: actions/checkout@v4
     - uses: stellar/actions/rust-cache@main
     - run: rustup update
-    - uses: stellar/binaries@v24
+    - uses: stellar/binaries@v25
       with:
         name: cargo-edit
         version: 0.11.6
