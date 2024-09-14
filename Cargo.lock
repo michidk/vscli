@@ -1613,9 +1613,9 @@ checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
 
 [[package]]
 name = "wslpath2"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74a5f9f78fe27523a6196477611bc8389924014ae51ed4bca27a4317ff296f6a"
+checksum = "15ffd3e518bbbe8384cf56a615afd058fed2c3c2b6e4b78eb869a6d9ce31e520"
 
 [[package]]
 name = "zerocopy"

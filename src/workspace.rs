@@ -206,21 +206,21 @@ impl Workspace {
 
         if is_wsl {
             debug!("WSL detected");
-            // CHECK: Not so nice to work on paths in "string" fashion
+
             ws_path = wslpath2::convert(
                 ws_path.as_str(),
                 None,
                 wslpath2::Conversion::WslToWindows,
                 true,
             )
-            .map_err(|e| eyre!("Error while getting wslpath: {}", e))?;
+            .map_err(|e| eyre!("Error while getting wslpath: {} (path: {ws_path:?})", e))?;
             dc_path = wslpath2::convert(
                 dc_path.as_str(),
                 None,
                 wslpath2::Conversion::WslToWindows,
                 true,
             )
-            .map_err(|e| eyre!("Error while getting wslpath: {}", e))?;
+            .map_err(|e| eyre!("Error while getting wslpath: {} (path: {dc_path:?})", e))?;
         }
 
         #[cfg(windows)]
