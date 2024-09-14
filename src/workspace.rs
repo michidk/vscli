@@ -40,14 +40,16 @@ impl DevContainer {
             debug!("Could not read workspace folder from config -> using default folder");
             format!("/workspaces/{workspace_name}")
         };
+        trace!("Workspace folder: {folder}");
 
         let name = if let Some(name) = dev_container["name"].as_str() {
-            trace!("Read workspace name from config: {}", name);
+            debug!("Read workspace name from config: {}", name);
             Some(name.to_owned())
         } else {
-            trace!("Could not read workspace name from config");
+            debug!("Could not read workspace name from config");
             None
         };
+        trace!("Workspace name: {name:?}");
 
         Ok(DevContainer {
             config_path: path.to_owned(),
