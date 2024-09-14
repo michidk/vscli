@@ -32,7 +32,7 @@ cargo install vscli
 
 ### [Homebrew](https://brew.sh/)
 
-Install [vscli using homebrew](https://github.com/michidk/homebrew-tools/blob/main/Formula/vscli.rb) on Linux:
+Install [vscli using homebrew](https://github.com/michidk/homebrew-tools/blob/main/Formula/vscli.rb) on Linux or Mac:
 
 ```sh
 brew install michidk/tools/vscli
