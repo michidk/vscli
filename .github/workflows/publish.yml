@@ -36,14 +36,44 @@ jobs:
     runs-on: ubuntu-22.04
     environment: "publish-homebrew"
     steps:
-      - name: Bump Homebrew formula
-        uses: mislav/bump-homebrew-formula-action@v2
+      - name: Checkout homebrew-tools Repository
+        uses: actions/checkout@v3
         with:
-          formula-name: vscli
-          homebrew-tap: michidk/homebrew-tools
-          create-pullrequest: true
-          tag-name: ${{ github.event.inputs.tag-name }}
-          download-url: "https://github.com/michidk/vscli/releases/download/${{ github.event.inputs.tag-name }}/vscli-x86_64-unknown-linux-musl.tar.gz"
-        env:
-          # PAT needs public_repo and workflow access
-          COMMITTER_TOKEN: ${{ secrets.COMMITTER_TOKEN }}
+          repository: michidk/homebrew-tools
+          token: ${{ secrets.COMMITTER_TOKEN }}
+          path: homebrew-tools
+          ref: main
+
+      - name: Update vscli.rb Formula
+        run: |
+          FORMULA_PATH="homebrew-tools/Formula/vscli.rb"
+          mkdir -p artifacts
+
+          artifacts=(
+            "vscli-x86_64-apple-darwin.tar.gz"
+            "vscli-aarch64-apple-darwin.tar.gz"
+            "vscli-x86_64-unknown-linux-musl.tar.gz"
+            "vscli-arm-unknown-linux-gnueabihf.tar.gz"
+          )
+
+          for asset in "${artifacts[@]}"; do
+            identifier="${asset%.tar.gz}"
+            wget -q -O "artifacts/${asset}" "https://github.com/michidk/vscli/releases/download/${{ github.event.inputs.tag-name }}/${asset}" || exit 1
+            sha256=$(sha256sum "artifacts/${asset}" | awk '{print $1}')
+            sed -i "s|sha256 \".*\" # sha:${identifier}|sha256 \"${sha256}\" # sha:${identifier}|" "$FORMULA_PATH"
+          done
+
+          # Extract version number by removing the leading 'v' from the tag
+          version_number="${{ github.event.inputs.tag-name }}"
+          version_number="${version_number#v}"
+
+          sed -i "s/version \".*\"/version \"${version_number}\"/" "$FORMULA_PATH"
+
+      - name: Commit and Push Changes
+        run: |
+          cd homebrew-tools
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/vscli.rb
+          git commit -m "Update vscli to version ${{ github.event.inputs.tag-name }}"
+          git push origin main
