@@ -12,7 +12,9 @@ use std::{
 
 use crate::launch::Behavior;
 
-const MAX_HISTORY_ENTRIES: usize = 20;
+/// The maximum number of entries to keep in the history
+// This is an arbitrary number, but it should be enough to keep the history manageable
+const MAX_HISTORY_ENTRIES: usize = 35;
 
 /// An entry in the history
 #[derive(Debug, Clone, Serialize, Deserialize)]
