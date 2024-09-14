@@ -59,7 +59,8 @@ impl DevContainer {
     /// Parses the dev container config file.
     /// `https://code.visualstudio.com/remote/advancedcontainers/change-default-source-mount`
     fn parse_dev_container_config(path: &Path) -> Result<serde_json::Value> {
-        let content = std::fs::read_to_string(path)?;
+        let content = std::fs::read_to_string(path)
+            .wrap_err_with(|| format!("Failed to read dev container config file: {path:?}"))?;
 
         let config: serde_json::Value = json5::from_str(&content)
             .wrap_err_with(|| format!("Failed to parse json file: {path:?}"))?;
@@ -87,7 +88,8 @@ impl Workspace {
         }
 
         // canonicalize path
-        let path = std::fs::canonicalize(path).wrap_err_with(|| "Error canonicalizing path")?;
+        let path = std::fs::canonicalize(path)
+            .wrap_err_with(|| format!("Error canonicalizing path: {path:?}"))?;
         trace!("Canonicalized path: {}", path.display());
 
         // get workspace name (either directory or file name)
