@@ -113,6 +113,7 @@ impl Workspace {
     /// - A `.devcontainer.json` defined directly in the workspace folder.
     /// - A `.devcontainer/devcontainer.json` defined in the `.devcontainer/` folder.
     /// - Any `.devcontainer/**/devcontainer.json` file in any `.devcontainer/` subfolder (only one level deep).
+    ///
     /// This should results in a dev container detection algorithm similar to the one vscode uses.
     pub fn find_dev_container_configs(&self) -> Vec<PathBuf> {
         let mut configs = Vec::new();

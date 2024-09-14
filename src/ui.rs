@@ -259,7 +259,7 @@ fn render(frame: &mut Frame, app: &mut UI, rows: Vec<Row>) {
             .as_ref(),
         )
         .horizontal_margin(1)
-        .split(frame.size());
+        .split(frame.area());
 
     // Calculate the longest workspace and dev container names
     let longest_ws_name =
