@@ -23,7 +23,7 @@ defaults:
 jobs:
   test:
     name: Test Suite
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
@@ -45,7 +45,7 @@ jobs:
 
   lints:
     name: Lints
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
