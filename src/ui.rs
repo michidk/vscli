@@ -5,7 +5,7 @@ use crossterm::{
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
-use log::{debug, info, warn};
+use log::debug;
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Layout},
@@ -155,6 +155,11 @@ impl TableData {
         for row in &mut self.rows {
             row.search_score = Some(0);
         }
+
+        // Sort by `Last Opened` to keep same logic as previous versions
+        // Inverted to have newest at the top with ASC order
+        self.rows
+            .sort_by_key(|entry| -entry.entry.last_opened.timestamp());
     }
 }
 
@@ -204,6 +209,7 @@ impl<'a> UI<'a> {
             return;
         }
 
+        // TODO: This logic is still not working as intended. Also cleanup
         // See if selected item is still visible. If not select first, else reselect (index changed)
         if let Some(selected) = prev_selected {
             if self
@@ -328,14 +334,8 @@ fn run_app<B: Backend>(
                     if tracker.history.remove_by_uuid(uuid) {
                         if !app.delete_by_uuid(uuid) {
                             // Desync - Deleted from history but not from UI.
-                            warn!(
-                                "UI state and history state desynced during deletion - Resyncing"
-                            );
-
                             app.resync_table(&tracker.history);
                         }
-
-                        info!("Removed history entry `{uuid}`");
                     }
                 }
                 AppAction::SearchUpdate(pattern) => {
