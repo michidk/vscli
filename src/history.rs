@@ -9,6 +9,7 @@ use std::{
     ops::{Deref, DerefMut},
     path::PathBuf,
 };
+use uuid::Uuid;
 
 use crate::launch::Behavior;
 
@@ -19,6 +20,12 @@ const MAX_HISTORY_ENTRIES: usize = 35;
 /// An entry in the history
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Entry {
+    /// Unique identifier for the entry
+    ///
+    /// Note that this attribute is not being written back to the file when serializing. It is only
+    /// used "per session" to keep track of unique records.
+    #[serde(default = "::uuid::Uuid::new_v4", skip_serializing)]
+    pub uuid: Uuid,
     /// The name of the workspace
     pub workspace_name: String,
     /// The name of the dev container, if it exists
@@ -91,6 +98,15 @@ impl History {
     pub fn iter(&self) -> impl Iterator<Item = &Entry> {
         self.0.iter().rev()
     }
+
+    pub fn remove_by_uuid(&mut self, uuid: Uuid) -> bool {
+        // TODO: This is not good code. It shall be improved ... later
+        if let Some(entry) = self.0.iter().find(|entry| entry.uuid == uuid).cloned() {
+            return self.0.remove(&entry);
+        }
+
+        false
+    }
 }
 
 /// Manages the history and tracks the recently used workspaces
@@ -129,9 +145,9 @@ impl Tracker {
 
                     // find a non-existent backup file
                     let new_path = (0..10_000) // Set an upper limit of filename checks.
-                    .map(|i| path.with_file_name(format!(".history_{i}.json.bak")))
-                    .find(|path| !path.exists())
-                    .unwrap_or_else(|| path.with_file_name(".history.json.bak"));
+                        .map(|i| path.with_file_name(format!(".history_{i}.json.bak")))
+                        .find(|path| !path.exists())
+                        .unwrap_or_else(|| path.with_file_name(".history.json.bak"));
 
                     fs::rename(&path, &new_path).wrap_err_with(|| {
                         format!(
