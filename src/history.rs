@@ -21,7 +21,10 @@ const MAX_HISTORY_ENTRIES: usize = 35;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Entry {
     /// Unique identifier for the entry
-    #[serde(default = "::uuid::Uuid::new_v4")]
+    ///
+    /// Note that this attribute is not being written back to the file when serializing. It is only
+    /// used "per session" to keep track of unique records.
+    #[serde(default = "::uuid::Uuid::new_v4", skip_serializing)]
     pub uuid: Uuid,
     /// The name of the workspace
     pub workspace_name: String,

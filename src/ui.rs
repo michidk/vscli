@@ -1,3 +1,4 @@
+use clap::ValueEnum;
 use color_eyre::eyre::Result;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
@@ -21,20 +22,32 @@ use uuid::Uuid;
 
 use crate::history::{Entry, History, Tracker};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Mode {
+/// Indicates which component is currently focused by the UI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum Focus {
     Search,
     Select,
 }
 
+/// All "user triggered" action which the app might want to perform.
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum AppAction {
     Quit,
-    Selected(Uuid),
-    DeleteEntry(Uuid),
-    SearchUpdate(Option<String>),
+    SelectNext,
+    SelectPrevious,
+    SelectFirst,
+    SelectLast,
+    OpenSelected,
+    DeleteSelectedEntry,
+    CycleFocus,
+    SearchInput(tui_textarea::Input),
 }
 
+/// Represents a single record/entry of the UI table.
+///
+/// Additional to the representation ([`Self::row`]) it also contains other meta information to
+/// make e.g. filtering possible and efficient.
+#[derive(Debug, Clone)]
 struct TableRow {
     entry: Entry,
     row: Row<'static>,
@@ -67,10 +80,26 @@ impl From<Entry> for TableRow {
     }
 }
 
+/// Contains all UI related elements to display and operate on the entries of the table.
+#[derive(Debug, Clone)]
 struct TableData {
+    /// Be very careful when accessing this value directly as it represents all values regardless of
+    /// applied filter or not. It only makes sense if the action does not care about the filter and
+    /// if entries are accessed by uuid and not index/position.
+    ///
+    /// Most of the times [`Self::to_rows`] or [`Self::as_rows_full`] are desired.
     rows: Vec<TableRow>,
 
+    /// Caches the longest workspace name [`Self::rows`] contains.
+    ///
+    /// Note that this value does not change for a "session" even if a filter is applied and/or the
+    /// longest entry is deleted.
     max_worspace_name_len: Option<usize>,
+
+    /// Caches the longest devcontainer name [`Self::rows`] contains.
+    ///
+    /// Note that this value does not change for a "session" even if a filter is applied and/or the
+    /// longest entry is deleted.
     max_devcontainer_name_len: Option<usize>,
 }
 
@@ -90,30 +119,19 @@ impl TableData {
         this.rows
             .sort_by_key(|entry| -entry.entry.last_opened.timestamp());
 
-        this.recalculate_maxes();
-
-        this
-    }
-
-    pub fn is_filtered_out(&self, uuid: Uuid) -> Option<bool> {
-        self.rows
-            .iter()
-            .find(|row| row.entry.uuid == uuid)
-            .map(|entry| entry.search_score.is_none())
-    }
-
-    fn recalculate_maxes(&mut self) {
-        self.max_worspace_name_len = self
+        this.max_worspace_name_len = this
             .rows
             .iter()
             .map(|row| row.entry.workspace_name.len())
             .max();
 
-        self.max_devcontainer_name_len = self
+        this.max_devcontainer_name_len = this
             .rows
             .iter()
             .map(|row| row.entry.dev_container_name.as_deref().unwrap_or("").len())
             .max();
+
+        this
     }
 
     pub fn to_rows(&self) -> Vec<Row<'static>> {
@@ -123,6 +141,10 @@ impl TableData {
             .map(|row| &row.row)
             .cloned()
             .collect()
+    }
+
+    pub fn as_rows_full(&self) -> impl Iterator<Item = &TableRow> {
+        self.rows.iter().filter(|row| row.search_score.is_some())
     }
 
     pub fn apply_filter(&mut self, pattern: &str) -> bool {
@@ -145,8 +167,9 @@ impl TableData {
             row.search_score = new_search_score;
         }
 
+        // Sort is done ASC (e.g. smallest value is first/top). Thats why we negate the score as normally the higher the score, the better the match.
         self.rows
-            .sort_by_key(|row| row.search_score.unwrap_or(i64::MIN));
+            .sort_by_key(|row| row.search_score.unwrap_or(i64::MIN).saturating_neg());
 
         return changes;
     }
@@ -165,7 +188,7 @@ impl TableData {
 
 /// The UI state
 struct UI<'a> {
-    mode: Mode,
+    focus: Focus,
     search: TextArea<'a>,
     table_state: TableState,
     table_data: TableData,
@@ -173,10 +196,9 @@ struct UI<'a> {
 
 impl<'a> UI<'a> {
     /// Create new empty state from history tracker reference
-    pub fn new(history: &History) -> UI<'a> {
+    pub fn new(history: &History, focus: Focus) -> UI<'a> {
         UI {
-            // TODO: Add option for initial mode
-            mode: Mode::Search,
+            focus,
             search: TextArea::default(),
             table_state: TableState::default(),
             table_data: TableData::from_iter(history.iter().cloned()),
@@ -193,10 +215,18 @@ impl<'a> UI<'a> {
         self.table_state.select_previous();
     }
 
+    pub fn select_first(&mut self) {
+        self.table_state.select_first()
+    }
+
+    pub fn select_last(&mut self) {
+        self.table_state.select_last()
+    }
+
     pub fn apply_filter(&mut self, pattern: Option<&str>) {
         let pattern = pattern.unwrap_or("");
 
-        let prev_selected = self.get_selected_entry().cloned();
+        let prev_selected = self.get_selected_entry();
 
         let update_selected = if pattern.trim().is_empty() {
             self.reset_filter();
@@ -209,34 +239,21 @@ impl<'a> UI<'a> {
             return;
         }
 
-        // TODO: This logic is still not working as intended. Also cleanup
         // See if selected item is still visible. If not select first, else reselect (index changed)
         if let Some(selected) = prev_selected {
-            if self
-                .table_data
-                .is_filtered_out(selected.uuid)
-                .unwrap_or(true)
+            let new_rows = self.table_data.as_rows_full();
+
+            if let Some(index) = new_rows
+                .enumerate()
+                .find_map(|(index, entry)| (entry.entry.uuid == selected.uuid).then_some(index))
             {
-                self.table_state.select_first();
-            } else {
                 // Update index
-                if let Some(index) = self
-                    .table_data
-                    .rows
-                    .iter()
-                    .filter(|entry| {
-                        !self
-                            .table_data
-                            .is_filtered_out(entry.entry.uuid)
-                            .unwrap_or(true)
-                    })
-                    .position(|entry| entry.entry.uuid == selected.uuid)
-                {
-                    self.table_state.select(Some(index));
-                } else {
-                    self.table_state.select_first();
-                }
+                self.table_state.select(Some(index));
+            } else {
+                self.table_state.select_first();
             }
+        } else {
+            self.table_state.select_first();
         }
     }
 
@@ -244,9 +261,13 @@ impl<'a> UI<'a> {
         self.table_data.reset_filter();
     }
 
-    fn get_selected_entry(&self) -> Option<&Entry> {
-        let idx = self.table_state.selected()?;
-        self.table_data.rows.get(idx).map(|row| &row.entry)
+    fn get_selected_entry(&self) -> Option<Entry> {
+        let index = self.table_state.selected()?;
+        self.table_data
+            .as_rows_full()
+            .nth(index)
+            .cloned()
+            .map(|row| row.entry)
     }
 
     fn delete_by_uuid(&mut self, uuid: Uuid) -> bool {
@@ -267,6 +288,10 @@ impl<'a> UI<'a> {
         self.table_state.select(Some(0));
     }
 
+    /// Replaces the previous [`Self::table_data`] with a newly calculated one.
+    ///
+    /// This should only be done if there is a "desync" issue (e.g. deleted from history but failed
+    /// to delete from table data).
     fn resync_table(&mut self, history: &History) {
         self.table_data = TableData::from_iter(history.iter().cloned());
         self.reset_selected();
@@ -274,7 +299,7 @@ impl<'a> UI<'a> {
 }
 
 /// Starts the UI and returns the selected/resulting entry
-pub(crate) fn start(tracker: &mut Tracker) -> Result<Option<Entry>> {
+pub(crate) fn start(tracker: &mut Tracker, focus: Focus) -> Result<Option<Entry>> {
     debug!("Starting UI...");
 
     // setup terminal
@@ -287,7 +312,7 @@ pub(crate) fn start(tracker: &mut Tracker) -> Result<Option<Entry>> {
     let mut terminal = Terminal::new(backend)?;
 
     // create app and run it
-    let res = run_app(&mut terminal, UI::new(&tracker.history), tracker);
+    let res = run_app(&mut terminal, UI::new(&tracker.history, focus), tracker);
 
     // restore terminal
     disable_raw_mode()?;
@@ -321,54 +346,79 @@ fn run_app<B: Backend>(
 
         let input = event::read()?;
 
-        let res = match app.mode {
-            Mode::Search => handle_input_search(&mut app, input),
-            Mode::Select => handle_input_select(&mut app, input),
+        let res = match app.focus {
+            Focus::Search => handle_input_search(input),
+            Focus::Select => handle_input_select(input),
         }?;
 
         if let Some(res) = res {
             match res {
                 AppAction::Quit => return Ok(None),
-                AppAction::Selected(selected) => return Ok(Some(selected)),
-                AppAction::DeleteEntry(uuid) => {
-                    if tracker.history.remove_by_uuid(uuid) {
-                        if !app.delete_by_uuid(uuid) {
-                            // Desync - Deleted from history but not from UI.
-                            app.resync_table(&tracker.history);
+                AppAction::SelectNext => {
+                    app.select_next();
+                }
+                AppAction::SelectPrevious => {
+                    app.select_previous();
+                }
+                AppAction::SelectFirst => {
+                    app.select_first();
+                }
+                AppAction::SelectLast => {
+                    app.select_last();
+                }
+                AppAction::OpenSelected => {
+                    if let Some(selected) = app.get_selected_entry() {
+                        return Ok(Some(selected.uuid));
+                    }
+                }
+                AppAction::DeleteSelectedEntry => {
+                    if let Some(selected) = app.get_selected_entry() {
+                        let uuid = selected.uuid;
+                        if tracker.history.remove_by_uuid(uuid) {
+                            if !app.delete_by_uuid(uuid) {
+                                // Desync - Deleted from history but not from UI.
+                                app.resync_table(&tracker.history);
+                            }
                         }
                     }
                 }
-                AppAction::SearchUpdate(pattern) => {
-                    app.apply_filter(pattern.as_deref());
+                AppAction::SearchInput(input) => {
+                    if app.search.input(input) {
+                        let line = app.search.lines().first().cloned();
+                        app.apply_filter(line.as_deref());
+                    }
+                }
+                AppAction::CycleFocus => {
+                    // TODO: Not future proof
+                    app.focus = match app.focus {
+                        Focus::Search => Focus::Select,
+                        Focus::Select => Focus::Search,
+                    };
                 }
             }
         }
     }
 }
 
-fn handle_input_select(app: &mut UI, input: Event) -> io::Result<Option<AppAction>> {
+fn handle_input_select(input: Event) -> io::Result<Option<AppAction>> {
     if let Event::Key(key) = input {
         if key.kind != KeyEventKind::Press {
             return Ok(None);
         }
         match key.code {
-            KeyCode::Char('q') | KeyCode::Esc | KeyCode::Backspace => {
-                return Ok(Some(AppAction::Quit))
-            }
-            KeyCode::Down | KeyCode::Char('j') => app.select_next(),
-            KeyCode::Up | KeyCode::Char('k') => app.select_previous(),
+            KeyCode::Char('q') | KeyCode::Esc => return Ok(Some(AppAction::Quit)),
+            KeyCode::Down | KeyCode::Char('j') => return Ok(Some(AppAction::SelectNext)),
+            KeyCode::Up | KeyCode::Char('k') => return Ok(Some(AppAction::SelectPrevious)),
+            KeyCode::Char('1') | KeyCode::KeypadBegin => return Ok(Some(AppAction::SelectFirst)),
+            KeyCode::Char('0') | KeyCode::End => return Ok(Some(AppAction::SelectLast)),
             KeyCode::Enter | KeyCode::Char('o') => {
-                if let Some(selected) = app.get_selected_entry() {
-                    return Ok(Some(AppAction::Selected(selected.uuid)));
-                }
+                return Ok(Some(AppAction::OpenSelected));
             }
             KeyCode::Delete | KeyCode::Char('r' | 'x') => {
-                if let Some(selected) = app.get_selected_entry() {
-                    return Ok(Some(AppAction::DeleteEntry(selected.uuid)));
-                }
+                return Ok(Some(AppAction::DeleteSelectedEntry));
             }
             KeyCode::Tab => {
-                app.mode = Mode::Search;
+                return Ok(Some(AppAction::CycleFocus));
             }
             _ => {}
         }
@@ -377,25 +427,17 @@ fn handle_input_select(app: &mut UI, input: Event) -> io::Result<Option<AppActio
     Ok(None)
 }
 
-fn handle_input_search(app: &mut UI, input: Event) -> io::Result<Option<AppAction>> {
+fn handle_input_search(input: Event) -> io::Result<Option<AppAction>> {
     match input.into() {
         Input { key: Key::Esc, .. }
         | Input { key: Key::Tab, .. }
         | Input {
             key: Key::Enter, ..
         } => {
-            app.mode = Mode::Select;
+            return Ok(Some(AppAction::CycleFocus));
         }
-        input => {
-            if app.search.input(input) {
-                return Ok(Some(AppAction::SearchUpdate(
-                    app.search.lines().first().cloned(),
-                )));
-            }
-        }
+        input => return Ok(Some(AppAction::SearchInput(input))),
     }
-
-    Ok(None)
 }
 
 /// Main render function
@@ -439,21 +481,21 @@ fn render(frame: &mut Frame, app: &mut UI) {
         longest_dc_name as u16,
     );
 
-    let selected: Option<&Entry> = app.get_selected_entry();
+    let selected: Option<Entry> = app.get_selected_entry();
 
     // Render status area
     let status_area: Rc<[Rect]> = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(60), Constraint::Percentage(40)].as_ref())
         .split(area[2]);
-    render_status_area(frame, selected, &status_area);
+    render_status_area(frame, selected.as_ref(), &status_area);
 
     // Render additional info like args and dev container path
-    render_additional_info(frame, selected, [area[3], area[4]]);
+    render_additional_info(frame, selected.as_ref(), [area[3], area[4]]);
 }
 
 fn render_search_input(frame: &mut Frame, app: &mut UI, area: Rect) {
-    let style = if app.mode == Mode::Search {
+    let style = if app.focus == Focus::Search {
         Style::default().fg(Color::Blue)
     } else {
         Style::default().fg(Color::DarkGray)
@@ -477,7 +519,7 @@ fn render_table(
     longest_ws_name: u16,
     longest_dc_name: u16,
 ) {
-    let (header_style, selected_style) = if app.mode == Mode::Select {
+    let (header_style, selected_style) = if app.focus == Focus::Select {
         (
             Style::default().bg(Color::Blue),
             Style::default().bg(Color::DarkGray),
@@ -587,6 +629,7 @@ fn render_additional_info(frame: &mut Frame, selected: Option<&Entry>, area: [Re
         Style::default().fg(Color::DarkGray),
     );
     let dc_path_info_par = Paragraph::new(dc_path_info).block(Block::default());
+
     frame.render_widget(dc_path_info_par, area[1]);
 }
 
