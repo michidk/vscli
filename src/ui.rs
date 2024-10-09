@@ -633,6 +633,9 @@ fn render_additional_info(frame: &mut Frame, selected: Option<&Entry>, area: [Re
     frame.render_widget(dc_path_info_par, area[1]);
 }
 
+/// Adds two optional [`i64`]s.
+///
+/// If at least one of the inputs is [`Option::Some`] then the result will also be [`Option::Some`].
 fn add_num_opt(o1: Option<i64>, o2: Option<i64>) -> Option<i64> {
     match (o1, o2) {
         (Some(n1), Some(n2)) => Some(n1 + n2),
