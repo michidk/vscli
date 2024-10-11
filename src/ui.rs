@@ -579,7 +579,7 @@ fn render_status_area(frame: &mut Frame, selected: Option<&Entry>, status_area: 
     frame.render_widget(additional_info_par, status_area[1]);
 
     let instruction = Span::styled(
-        "Press x to remove the selected item. Press q to quit.",
+        "Press x to remove the selected item. Press tab to switch focus. Press q to quit.",
         Style::default().fg(Color::Gray),
     );
     let instructions_par = Paragraph::new(instruction)

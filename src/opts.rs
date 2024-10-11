@@ -59,7 +59,7 @@ pub(crate) enum Commands {
     /// Opens an interactive list of recently used workspaces.
     #[clap(alias = "ui")]
     Recent {
-        #[arg(value_enum, short, long, default_value_t = Focus::Search, ignore_case = true)]
+        #[arg(value_enum, short, long, default_value_t = Focus::Select, ignore_case = true)]
         focus: Focus,
     },
 }
