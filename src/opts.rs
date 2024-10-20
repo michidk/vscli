@@ -2,7 +2,7 @@ use std::{ffi::OsString, path::PathBuf};
 
 use clap::{command, Parser, Subcommand};
 
-use crate::launch::ContainerStrategy;
+use crate::{launch::ContainerStrategy, ui::Focus};
 
 /// Main CLI arguments
 #[derive(Parser, Debug)]
@@ -58,5 +58,8 @@ pub(crate) enum Commands {
     },
     /// Opens an interactive list of recently used workspaces.
     #[clap(alias = "ui")]
-    Recent,
+    Recent {
+        #[arg(value_enum, short, long, default_value_t = Focus::Select, ignore_case = true)]
+        focus: Focus,
+    },
 }
