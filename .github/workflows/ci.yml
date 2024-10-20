@@ -8,6 +8,13 @@ on:
       - 'rust-toolchain.toml'
       - '.rustfmt.toml'
       - 'src/**'
+  pull_request:
+    paths:
+      - 'Cargo.lock'
+      - 'Cargo.toml'
+      - 'rust-toolchain.toml'
+      - '.rustfmt.toml'
+      - 'src/**'
 
 env:
   CARGO_INCREMENTAL: 0

@@ -171,7 +171,7 @@ impl TableData {
         self.rows
             .sort_by_key(|row| row.search_score.unwrap_or(i64::MIN).saturating_neg());
 
-        return changes;
+        changes
     }
 
     pub fn reset_filter(&mut self) {
@@ -216,11 +216,11 @@ impl<'a> UI<'a> {
     }
 
     pub fn select_first(&mut self) {
-        self.table_state.select_first()
+        self.table_state.select_first();
     }
 
     pub fn select_last(&mut self) {
-        self.table_state.select_last()
+        self.table_state.select_last();
     }
 
     pub fn apply_filter(&mut self, pattern: Option<&str>) {
@@ -346,13 +346,13 @@ fn run_app<B: Backend>(
 
         let input = event::read()?;
 
-        let res = match app.focus {
+        let action = match app.focus {
             Focus::Search => handle_input_search(input),
             Focus::Select => handle_input_select(input),
-        }?;
+        };
 
-        if let Some(res) = res {
-            match res {
+        if let Some(action) = action {
+            match action {
                 AppAction::Quit => return Ok(None),
                 AppAction::SelectNext => {
                     app.select_next();
@@ -374,6 +374,8 @@ fn run_app<B: Backend>(
                 AppAction::DeleteSelectedEntry => {
                     if let Some(selected) = app.get_selected_entry() {
                         let uuid = selected.uuid;
+                        // Allow for better readability
+                        #[allow(clippy::collapsible_if)]
                         if tracker.history.remove_by_uuid(uuid) {
                             if !app.delete_by_uuid(uuid) {
                                 // Desync - Deleted from history but not from UI.
@@ -400,43 +402,46 @@ fn run_app<B: Backend>(
     }
 }
 
-fn handle_input_select(input: Event) -> io::Result<Option<AppAction>> {
+// Allow to have consistent arguments and return values for both function paths (`handle_input_select` and
+// `handle_input_search`).
+#[allow(clippy::needless_pass_by_value)]
+fn handle_input_select(input: Event) -> Option<AppAction> {
     if let Event::Key(key) = input {
         if key.kind != KeyEventKind::Press {
-            return Ok(None);
+            return None;
         }
         match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => return Ok(Some(AppAction::Quit)),
-            KeyCode::Down | KeyCode::Char('j') => return Ok(Some(AppAction::SelectNext)),
-            KeyCode::Up | KeyCode::Char('k') => return Ok(Some(AppAction::SelectPrevious)),
-            KeyCode::Char('1') | KeyCode::KeypadBegin => return Ok(Some(AppAction::SelectFirst)),
-            KeyCode::Char('0') | KeyCode::End => return Ok(Some(AppAction::SelectLast)),
+            KeyCode::Char('q') | KeyCode::Esc => return Some(AppAction::Quit),
+            KeyCode::Down | KeyCode::Char('j') => return Some(AppAction::SelectNext),
+            KeyCode::Up | KeyCode::Char('k') => return Some(AppAction::SelectPrevious),
+            KeyCode::Char('1') | KeyCode::KeypadBegin => return Some(AppAction::SelectFirst),
+            KeyCode::Char('0') | KeyCode::End => return Some(AppAction::SelectLast),
             KeyCode::Enter | KeyCode::Char('o') => {
-                return Ok(Some(AppAction::OpenSelected));
+                return Some(AppAction::OpenSelected);
             }
             KeyCode::Delete | KeyCode::Char('r' | 'x') => {
-                return Ok(Some(AppAction::DeleteSelectedEntry));
+                return Some(AppAction::DeleteSelectedEntry);
             }
             KeyCode::Tab => {
-                return Ok(Some(AppAction::CycleFocus));
+                return Some(AppAction::CycleFocus);
             }
             _ => {}
         }
     }
 
-    Ok(None)
+    None
 }
 
-fn handle_input_search(input: Event) -> io::Result<Option<AppAction>> {
+// Allow to have consistent arguments and return values for both function paths (`handle_input_select` and
+// `handle_input_search`).
+#[allow(clippy::unnecessary_wraps)]
+fn handle_input_search(input: Event) -> Option<AppAction> {
     match input.into() {
-        Input { key: Key::Esc, .. }
-        | Input { key: Key::Tab, .. }
-        | Input {
-            key: Key::Enter, ..
-        } => {
-            return Ok(Some(AppAction::CycleFocus));
-        }
-        input => return Ok(Some(AppAction::SearchInput(input))),
+        Input {
+            key: Key::Esc | Key::Tab | Key::Enter,
+            ..
+        } => Some(AppAction::CycleFocus),
+        input => Some(AppAction::SearchInput(input)),
     }
 }
 
@@ -477,8 +482,8 @@ fn render(frame: &mut Frame, app: &mut UI) {
         frame,
         app,
         area[1],
-        longest_ws_name as u16,
-        longest_dc_name as u16,
+        u16::try_from(longest_ws_name).unwrap_or(u16::MAX),
+        u16::try_from(longest_dc_name).unwrap_or(u16::MAX),
     );
 
     let selected: Option<Entry> = app.get_selected_entry();
