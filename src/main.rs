@@ -89,9 +89,9 @@ fn main() -> Result<()> {
                 last_opened: Utc::now(),
             });
         }
-        opts::Commands::Recent { focus } => {
+        opts::Commands::Recent => {
             // Get workspace from user selection
-            let res = ui::start(&mut tracker, focus)?;
+            let res = ui::start(&mut tracker)?;
             if let Some(entry) = res {
                 let ws = Workspace::from_path(&entry.workspace_path)?;
                 let ws_name = ws.name.clone();

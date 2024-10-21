@@ -1,7 +1,8 @@
-use clap::ValueEnum;
 use color_eyre::eyre::Result;
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
+    event::{
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
+    },
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -17,17 +18,10 @@ use ratatui::{
     Frame, Terminal,
 };
 use std::{borrow::Cow, io, rc::Rc};
-use tui_textarea::{Input, Key, TextArea};
+use tui_textarea::TextArea;
 use uuid::Uuid;
 
 use crate::history::{Entry, History, Tracker};
-
-/// Indicates which component is currently focused by the UI.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-pub enum Focus {
-    Search,
-    Select,
-}
 
 /// All "user triggered" action which the app might want to perform.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,7 +33,6 @@ enum AppAction {
     SelectLast,
     OpenSelected,
     DeleteSelectedEntry,
-    CycleFocus,
     SearchInput(tui_textarea::Input),
 }
 
@@ -188,7 +181,6 @@ impl TableData {
 
 /// The UI state
 struct UI<'a> {
-    focus: Focus,
     search: TextArea<'a>,
     table_state: TableState,
     table_data: TableData,
@@ -196,9 +188,8 @@ struct UI<'a> {
 
 impl<'a> UI<'a> {
     /// Create new empty state from history tracker reference
-    pub fn new(history: &History, focus: Focus) -> UI<'a> {
+    pub fn new(history: &History) -> UI<'a> {
         UI {
-            focus,
             search: TextArea::default(),
             table_state: TableState::default(),
             table_data: TableData::from_iter(history.iter().cloned()),
@@ -299,7 +290,7 @@ impl<'a> UI<'a> {
 }
 
 /// Starts the UI and returns the selected/resulting entry
-pub(crate) fn start(tracker: &mut Tracker, focus: Focus) -> Result<Option<Entry>> {
+pub(crate) fn start(tracker: &mut Tracker) -> Result<Option<Entry>> {
     debug!("Starting UI...");
 
     // setup terminal
@@ -312,7 +303,7 @@ pub(crate) fn start(tracker: &mut Tracker, focus: Focus) -> Result<Option<Entry>
     let mut terminal = Terminal::new(backend)?;
 
     // create app and run it
-    let res = run_app(&mut terminal, UI::new(&tracker.history, focus), tracker);
+    let res = run_app(&mut terminal, UI::new(&tracker.history), tracker);
 
     // restore terminal
     disable_raw_mode()?;
@@ -346,10 +337,7 @@ fn run_app<B: Backend>(
 
         let input = event::read()?;
 
-        let action = match app.focus {
-            Focus::Search => handle_input_search(input),
-            Focus::Select => handle_input_select(input),
-        };
+        let action = handle_input(input);
 
         if let Some(action) = action {
             match action {
@@ -390,59 +378,39 @@ fn run_app<B: Backend>(
                         app.apply_filter(line.as_deref());
                     }
                 }
-                AppAction::CycleFocus => {
-                    // TODO: Not future proof
-                    app.focus = match app.focus {
-                        Focus::Search => Focus::Select,
-                        Focus::Select => Focus::Search,
-                    };
-                }
             }
         }
     }
 }
 
-// Allow to have consistent arguments and return values for both function paths (`handle_input_select` and
-// `handle_input_search`).
-#[allow(clippy::needless_pass_by_value)]
-fn handle_input_select(input: Event) -> Option<AppAction> {
-    if let Event::Key(key) = input {
+fn handle_input(input: Event) -> Option<AppAction> {
+    if let Event::Key(key) = &input {
         if key.kind != KeyEventKind::Press {
             return None;
         }
-        match key.code {
-            KeyCode::Char('q') | KeyCode::Esc => return Some(AppAction::Quit),
-            KeyCode::Down | KeyCode::Char('j') => return Some(AppAction::SelectNext),
-            KeyCode::Up | KeyCode::Char('k') => return Some(AppAction::SelectPrevious),
-            KeyCode::Char('1') | KeyCode::KeypadBegin => return Some(AppAction::SelectFirst),
-            KeyCode::Char('0') | KeyCode::End => return Some(AppAction::SelectLast),
-            KeyCode::Enter | KeyCode::Char('o') => {
-                return Some(AppAction::OpenSelected);
-            }
-            KeyCode::Delete | KeyCode::Char('r' | 'x') => {
-                return Some(AppAction::DeleteSelectedEntry);
-            }
-            KeyCode::Tab => {
-                return Some(AppAction::CycleFocus);
-            }
-            _ => {}
+
+        let is_key = |code: KeyCode| key.code == code;
+        let is_char = |c: char| is_key(KeyCode::Char(c));
+        let is_ctrl_char = |c: char| key.modifiers.contains(KeyModifiers::CONTROL) && is_char(c);
+
+        if is_key(KeyCode::Esc) || is_ctrl_char('q') {
+            return Some(AppAction::Quit);
+        } else if is_key(KeyCode::Down) || is_ctrl_char('j') {
+            return Some(AppAction::SelectNext);
+        } else if is_key(KeyCode::Up) || is_ctrl_char('k') {
+            return Some(AppAction::SelectPrevious);
+        } else if is_key(KeyCode::KeypadBegin) || is_ctrl_char('1') {
+            return Some(AppAction::SelectFirst);
+        } else if is_key(KeyCode::End) || is_ctrl_char('0') {
+            return Some(AppAction::SelectLast);
+        } else if is_key(KeyCode::Enter) || is_ctrl_char('o') {
+            return Some(AppAction::OpenSelected);
+        } else if is_key(KeyCode::Delete) || is_ctrl_char('r') || is_ctrl_char('x') {
+            return Some(AppAction::DeleteSelectedEntry);
         }
     }
 
-    None
-}
-
-// Allow to have consistent arguments and return values for both function paths (`handle_input_select` and
-// `handle_input_search`).
-#[allow(clippy::unnecessary_wraps)]
-fn handle_input_search(input: Event) -> Option<AppAction> {
-    match input.into() {
-        Input {
-            key: Key::Esc | Key::Tab | Key::Enter,
-            ..
-        } => Some(AppAction::CycleFocus),
-        input => Some(AppAction::SearchInput(input)),
-    }
+    Some(AppAction::SearchInput(input.into()))
 }
 
 /// Main render function
@@ -500,11 +468,7 @@ fn render(frame: &mut Frame, app: &mut UI) {
 }
 
 fn render_search_input(frame: &mut Frame, app: &mut UI, area: Rect) {
-    let style = if app.focus == Focus::Search {
-        Style::default().fg(Color::Blue)
-    } else {
-        Style::default().fg(Color::DarkGray)
-    };
+    let style = Style::default().fg(Color::Blue);
 
     app.search.set_block(
         Block::default()
@@ -524,17 +488,10 @@ fn render_table(
     longest_ws_name: u16,
     longest_dc_name: u16,
 ) {
-    let (header_style, selected_style) = if app.focus == Focus::Select {
-        (
-            Style::default().bg(Color::Blue),
-            Style::default().bg(Color::DarkGray),
-        )
-    } else {
-        (
-            Style::default().bg(Color::DarkGray),
-            Style::default().bg(Color::DarkGray),
-        )
-    };
+    let (header_style, selected_style) = (
+        Style::default().bg(Color::Blue),
+        Style::default().bg(Color::DarkGray),
+    );
 
     let header_cells = TableData::HEADER
         .iter()
@@ -584,7 +541,7 @@ fn render_status_area(frame: &mut Frame, selected: Option<&Entry>, status_area: 
     frame.render_widget(additional_info_par, status_area[1]);
 
     let instruction = Span::styled(
-        "Press x to remove the selected item. Press tab to switch focus. Press q to quit.",
+        "Press CTRL+x to remove the selected item. Press CTRL+q to quit.",
         Style::default().fg(Color::Gray),
     );
     let instructions_par = Paragraph::new(instruction)
