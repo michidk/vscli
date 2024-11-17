@@ -58,7 +58,7 @@ impl From<(EntryId, Entry)> for TableRow {
                 .unwrap_or("")
                 .to_string(),
             value.workspace_path.to_string_lossy().to_string(),
-            DateTime::<Local>::from(value.last_opened.clone())
+            DateTime::<Local>::from(value.last_opened)
                 .format("%Y-%m-%d %H:%M:%S")
                 .to_string(),
         ];
@@ -256,11 +256,7 @@ impl<'a> UI<'a> {
 
     fn get_selected_row(&self) -> Option<TableRow> {
         let index = self.table_state.selected()?;
-        self.table_data
-            .as_rows_full()
-            .nth(index)
-            .cloned()
-            .map(|row| row)
+        self.table_data.as_rows_full().nth(index).cloned()
     }
 
     fn delete(&mut self, entry_id: EntryId) -> bool {
@@ -367,7 +363,7 @@ fn run_app<B: Backend>(
                         let entry_id = selected.id;
                         // Allow for better readability
                         #[allow(clippy::collapsible_if)]
-                        if tracker.history.delete(&entry_id).is_some() {
+                        if tracker.history.delete(entry_id).is_some() {
                             if !app.delete(entry_id) {
                                 // Desync - Deleted from history but not from UI.
                                 app.resync_table(&tracker.history);

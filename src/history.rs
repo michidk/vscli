@@ -98,17 +98,13 @@ impl History {
     }
 
     pub fn update(&mut self, id: EntryId, entry: Entry) -> Option<Entry> {
-        if self.0.contains_key(&id) {
-            return Some(
-                self.0
-                    .insert(id, entry)
-                    .expect("Histroy entry to already exist and be returned"),
-            );
+        if let std::collections::hash_map::Entry::Occupied(mut e) = self.0.entry(id) {
+            return Some(e.insert(entry));
         }
         None
     }
 
-    pub fn delete(&mut self, id: &EntryId) -> Option<Entry> {
+    pub fn delete(&mut self, id: EntryId) -> Option<Entry> {
         self.0.remove(&id)
     }
 
@@ -116,13 +112,13 @@ impl History {
         if let Some(id) = self
             .0
             .iter_mut()
-            .find_map(|(id, history_entry)| (history_entry == &entry).then(|| *id))
+            .find_map(|(id, history_entry)| (history_entry == &entry).then_some(*id))
         {
-            let _ = assert!(
+            assert!(
                 self.update(id, entry).is_some(),
                 "Existing history entry to be replaced"
             );
-            return id;
+            id
         } else {
             self.insert(entry)
         }
