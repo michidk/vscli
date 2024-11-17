@@ -78,7 +78,7 @@ fn main() -> Result<()> {
             let dev_container = setup.launch(config)?;
 
             // Store the workspace in the history
-            tracker.history.insert(Entry {
+            tracker.history.upsert(Entry {
                 workspace_name: ws_name,
                 dev_container_name: dev_container.as_ref().and_then(|dc| dc.name.clone()),
                 workspace_path: path.canonicalize()?,

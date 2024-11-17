@@ -1,3 +1,4 @@
+use chrono::{DateTime, Local};
 use color_eyre::eyre::Result;
 use crossterm::{
     event::{
@@ -57,9 +58,7 @@ impl From<(EntryId, Entry)> for TableRow {
                 .unwrap_or("")
                 .to_string(),
             value.workspace_path.to_string_lossy().to_string(),
-            value
-                .last_opened
-                .clone()
+            DateTime::<Local>::from(value.last_opened.clone())
                 .format("%Y-%m-%d %H:%M:%S")
                 .to_string(),
         ];
@@ -514,7 +513,7 @@ fn render_table(
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("VSCLI - Recent Workspaces"),
+                .title("Recent Workspaces"),
         )
         .highlight_style(selected_style)
         .highlight_symbol("> ");

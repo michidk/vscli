@@ -102,7 +102,7 @@ impl History {
             return Some(
                 self.0
                     .insert(id, entry)
-                    .expect("Entry to already exist and be returned"),
+                    .expect("Histroy entry to already exist and be returned"),
             );
         }
         None
@@ -110,6 +110,22 @@ impl History {
 
     pub fn delete(&mut self, id: &EntryId) -> Option<Entry> {
         self.0.remove(&id)
+    }
+
+    pub fn upsert(&mut self, entry: Entry) -> EntryId {
+        if let Some(id) = self
+            .0
+            .iter_mut()
+            .find_map(|(id, history_entry)| (history_entry == &entry).then(|| *id))
+        {
+            let _ = assert!(
+                self.update(id, entry).is_some(),
+                "Existing history entry to be replaced"
+            );
+            return id;
+        } else {
+            self.insert(entry)
+        }
     }
 
     pub fn iter(&self) -> std::collections::hash_map::Iter<'_, EntryId, Entry> {
