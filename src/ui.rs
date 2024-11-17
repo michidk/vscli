@@ -19,9 +19,8 @@ use ratatui::{
 };
 use std::{borrow::Cow, io, rc::Rc};
 use tui_textarea::TextArea;
-use uuid::Uuid;
 
-use crate::history::{Entry, History, Tracker};
+use crate::history::{Entry, EntryId, History, Tracker};
 
 /// All "user triggered" action which the app might want to perform.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,13 +41,14 @@ enum AppAction {
 /// make e.g. filtering possible and efficient.
 #[derive(Debug, Clone)]
 struct TableRow {
+    id: EntryId,
     entry: Entry,
     row: Row<'static>,
     search_score: Option<i64>,
 }
 
-impl From<Entry> for TableRow {
-    fn from(value: Entry) -> Self {
+impl From<(EntryId, Entry)> for TableRow {
+    fn from((id, value): (EntryId, Entry)) -> Self {
         let cells: Vec<String> = vec![
             value.workspace_name.to_string(),
             value
@@ -66,6 +66,7 @@ impl From<Entry> for TableRow {
         let row = Row::new(cells).height(1);
 
         Self {
+            id,
             row,
             entry: value,
             search_score: Some(0),
@@ -78,7 +79,7 @@ impl From<Entry> for TableRow {
 struct TableData {
     /// Be very careful when accessing this value directly as it represents all values regardless of
     /// applied filter or not. It only makes sense if the action does not care about the filter and
-    /// if entries are accessed by uuid and not index/position.
+    /// if entries are accessed by id and not index/position.
     ///
     /// Most of the times [`Self::to_rows`] or [`Self::as_rows_full`] are desired.
     rows: Vec<TableRow>,
@@ -99,9 +100,9 @@ struct TableData {
 impl TableData {
     pub const HEADER: [&'static str; 4] = ["Workspace", "Dev Container", "Path", "Last Opened"];
 
-    pub fn from_iter<I: Iterator<Item = E>, E: Into<Entry>>(iter: I) -> Self {
+    pub fn from_iter<I: Iterator<Item = (EntryId, Entry)>>(iter: I) -> Self {
         let mut this = Self {
-            rows: iter.into_iter().map(|entry| entry.into().into()).collect(),
+            rows: iter.into_iter().map(TableRow::from).collect(),
 
             max_devcontainer_name_len: None,
             max_worspace_name_len: None,
@@ -192,7 +193,9 @@ impl<'a> UI<'a> {
         UI {
             search: TextArea::default(),
             table_state: TableState::default(),
-            table_data: TableData::from_iter(history.iter().cloned()),
+            table_data: TableData::from_iter(
+                history.iter().map(|(id, entry)| (*id, entry.clone())),
+            ),
         }
     }
 
@@ -217,7 +220,7 @@ impl<'a> UI<'a> {
     pub fn apply_filter(&mut self, pattern: Option<&str>) {
         let pattern = pattern.unwrap_or("");
 
-        let prev_selected = self.get_selected_entry();
+        let prev_selected = self.get_selected_row();
 
         let update_selected = if pattern.trim().is_empty() {
             self.reset_filter();
@@ -236,7 +239,7 @@ impl<'a> UI<'a> {
 
             if let Some(index) = new_rows
                 .enumerate()
-                .find_map(|(index, entry)| (entry.entry.uuid == selected.uuid).then_some(index))
+                .find_map(|(index, entry)| (entry.id == selected.id).then_some(index))
             {
                 // Update index
                 self.table_state.select(Some(index));
@@ -252,21 +255,21 @@ impl<'a> UI<'a> {
         self.table_data.reset_filter();
     }
 
-    fn get_selected_entry(&self) -> Option<Entry> {
+    fn get_selected_row(&self) -> Option<TableRow> {
         let index = self.table_state.selected()?;
         self.table_data
             .as_rows_full()
             .nth(index)
             .cloned()
-            .map(|row| row.entry)
+            .map(|row| row)
     }
 
-    fn delete_by_uuid(&mut self, uuid: Uuid) -> bool {
+    fn delete(&mut self, entry_id: EntryId) -> bool {
         if let Some(index) = self
             .table_data
             .rows
             .iter()
-            .position(|entry| entry.entry.uuid == uuid)
+            .position(|entry| entry.id == entry_id)
         {
             self.table_data.rows.remove(index);
             return true;
@@ -284,13 +287,14 @@ impl<'a> UI<'a> {
     /// This should only be done if there is a "desync" issue (e.g. deleted from history but failed
     /// to delete from table data).
     fn resync_table(&mut self, history: &History) {
-        self.table_data = TableData::from_iter(history.iter().cloned());
+        self.table_data =
+            TableData::from_iter(history.iter().map(|(id, entry)| (*id, entry.clone())));
         self.reset_selected();
     }
 }
 
 /// Starts the UI and returns the selected/resulting entry
-pub(crate) fn start(tracker: &mut Tracker) -> Result<Option<Entry>> {
+pub(crate) fn start(tracker: &mut Tracker) -> Result<Option<(EntryId, Entry)>> {
     debug!("Starting UI...");
 
     // setup terminal
@@ -315,12 +319,12 @@ pub(crate) fn start(tracker: &mut Tracker) -> Result<Option<Entry>> {
     terminal.show_cursor()?;
     debug!("Terminal restored");
 
-    Ok(res?.and_then(|uuid| {
+    Ok(res?.and_then(|selected_id| {
         tracker
             .history
             .iter()
-            .find(|entry| entry.uuid == uuid)
-            .cloned()
+            .find(|(id, _)| **id == selected_id)
+            .map(|(id, entry)| (*id, entry.clone()))
     }))
 }
 
@@ -329,7 +333,7 @@ fn run_app<B: Backend>(
     terminal: &mut Terminal<B>,
     mut app: UI,
     tracker: &mut Tracker,
-) -> io::Result<Option<Uuid>> {
+) -> io::Result<Option<EntryId>> {
     app.table_state.select(Some(0)); // Select the most recent element by default
 
     loop {
@@ -355,17 +359,17 @@ fn run_app<B: Backend>(
                     app.select_last();
                 }
                 AppAction::OpenSelected => {
-                    if let Some(selected) = app.get_selected_entry() {
-                        return Ok(Some(selected.uuid));
+                    if let Some(selected) = app.get_selected_row() {
+                        return Ok(Some(selected.id));
                     }
                 }
                 AppAction::DeleteSelectedEntry => {
-                    if let Some(selected) = app.get_selected_entry() {
-                        let uuid = selected.uuid;
+                    if let Some(selected) = app.get_selected_row() {
+                        let entry_id = selected.id;
                         // Allow for better readability
                         #[allow(clippy::collapsible_if)]
-                        if tracker.history.remove_by_uuid(uuid) {
-                            if !app.delete_by_uuid(uuid) {
+                        if tracker.history.delete(&entry_id).is_some() {
+                            if !app.delete(entry_id) {
                                 // Desync - Deleted from history but not from UI.
                                 app.resync_table(&tracker.history);
                             }
@@ -454,7 +458,7 @@ fn render(frame: &mut Frame, app: &mut UI) {
         u16::try_from(longest_dc_name).unwrap_or(u16::MAX),
     );
 
-    let selected: Option<Entry> = app.get_selected_entry();
+    let selected: Option<Entry> = app.get_selected_row().map(|row| row.entry);
 
     // Render status area
     let status_area: Rc<[Rect]> = Layout::default()
