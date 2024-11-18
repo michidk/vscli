@@ -19,7 +19,6 @@ use clap::Parser;
 use color_eyre::eyre::Result;
 use log::trace;
 use std::io::Write;
-use uuid::Uuid;
 
 use crate::history::{Entry, Tracker};
 
@@ -79,8 +78,7 @@ fn main() -> Result<()> {
             let dev_container = setup.launch(config)?;
 
             // Store the workspace in the history
-            tracker.push(Entry {
-                uuid: Uuid::new_v4(),
+            tracker.history.upsert(Entry {
                 workspace_name: ws_name,
                 dev_container_name: dev_container.as_ref().and_then(|dc| dc.name.clone()),
                 workspace_path: path.canonicalize()?,
@@ -92,7 +90,7 @@ fn main() -> Result<()> {
         opts::Commands::Recent => {
             // Get workspace from user selection
             let res = ui::start(&mut tracker)?;
-            if let Some(entry) = res {
+            if let Some((id, entry)) = res {
                 let ws = Workspace::from_path(&entry.workspace_path)?;
                 let ws_name = ws.name.clone();
 
@@ -101,15 +99,17 @@ fn main() -> Result<()> {
                 let dev_container = setup.launch(entry.config_path)?;
 
                 // Update the tracker entry
-                tracker.push(Entry {
-                    uuid: Uuid::new_v4(),
-                    workspace_name: ws_name,
-                    dev_container_name: dev_container.as_ref().and_then(|dc| dc.name.clone()),
-                    workspace_path: entry.workspace_path.clone(),
-                    config_path: dev_container.map(|dc| dc.config_path),
-                    behavior: entry.behavior.clone(),
-                    last_opened: Utc::now(),
-                });
+                tracker.history.update(
+                    id,
+                    Entry {
+                        workspace_name: ws_name,
+                        dev_container_name: dev_container.as_ref().and_then(|dc| dc.name.clone()),
+                        workspace_path: entry.workspace_path.clone(),
+                        config_path: dev_container.map(|dc| dc.config_path),
+                        behavior: entry.behavior.clone(),
+                        last_opened: Utc::now(),
+                    },
+                );
             }
         }
     }

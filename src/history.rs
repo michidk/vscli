@@ -4,12 +4,11 @@ use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
-    collections::BTreeSet,
+    collections::HashMap,
     fs::{self, File},
-    ops::{Deref, DerefMut},
     path::PathBuf,
+    sync::atomic::AtomicUsize,
 };
-use uuid::Uuid;
 
 use crate::launch::Behavior;
 
@@ -20,12 +19,6 @@ const MAX_HISTORY_ENTRIES: usize = 35;
 /// An entry in the history
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Entry {
-    /// Unique identifier for the entry
-    ///
-    /// Note that this attribute is not being written back to the file when serializing. It is only
-    /// used "per session" to keep track of unique records.
-    #[serde(default = "::uuid::Uuid::new_v4", skip_serializing)]
-    pub uuid: Uuid,
     /// The name of the workspace
     pub workspace_name: String,
     /// The name of the dev container, if it exists
@@ -71,41 +64,72 @@ impl PartialOrd for Entry {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct EntryId(usize);
+
+impl EntryId {
+    pub fn new() -> Self {
+        static GLOBAL_ID: AtomicUsize = AtomicUsize::new(0);
+        Self(GLOBAL_ID.fetch_add(1, std::sync::atomic::Ordering::SeqCst))
+    }
+}
+
 /// Contains the recent used workspaces
 ///
 /// # Note
 /// We use a `BTreeSet` so it's sorted and does not contain duplicates
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct History(BTreeSet<Entry>);
-
-// Transparent wrapper around `BTreeSet`
-impl Deref for History {
-    type Target = BTreeSet<Entry>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for History {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
+#[derive(Default, Debug, Clone)]
+pub struct History(HashMap<EntryId, Entry>);
 
 impl History {
-    /// Reverse iteration order, to display the most recent entries first
-    pub fn iter(&self) -> impl Iterator<Item = &Entry> {
-        self.0.iter().rev()
+    pub fn from_entries(entries: Vec<Entry>) -> Self {
+        Self(
+            entries
+                .into_iter()
+                .map(|entry| (EntryId::new(), entry))
+                .collect(),
+        )
     }
 
-    pub fn remove_by_uuid(&mut self, uuid: Uuid) -> bool {
-        // TODO: This is not good code. It shall be improved ... later
-        if let Some(entry) = self.0.iter().find(|entry| entry.uuid == uuid).cloned() {
-            return self.0.remove(&entry);
-        }
+    pub fn insert(&mut self, entry: Entry) -> EntryId {
+        let id = EntryId::new();
+        assert_eq!(self.0.insert(id, entry), None);
+        id
+    }
 
-        false
+    pub fn update(&mut self, id: EntryId, entry: Entry) -> Option<Entry> {
+        if let std::collections::hash_map::Entry::Occupied(mut e) = self.0.entry(id) {
+            return Some(e.insert(entry));
+        }
+        None
+    }
+
+    pub fn delete(&mut self, id: EntryId) -> Option<Entry> {
+        self.0.remove(&id)
+    }
+
+    pub fn upsert(&mut self, entry: Entry) -> EntryId {
+        if let Some(id) = self
+            .0
+            .iter_mut()
+            .find_map(|(id, history_entry)| (history_entry == &entry).then_some(*id))
+        {
+            assert!(
+                self.update(id, entry).is_some(),
+                "Existing history entry to be replaced"
+            );
+            id
+        } else {
+            self.insert(entry)
+        }
+    }
+
+    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, EntryId, Entry> {
+        self.0.iter()
+    }
+
+    pub fn into_entries(self) -> Vec<Entry> {
+        self.0.into_values().collect()
     }
 }
 
@@ -133,11 +157,14 @@ impl Tracker {
             }
 
             let file = File::open(&path)?;
-            match serde_json::from_reader::<_, History>(file) {
-                Ok(history) => {
-                    debug!("Imported {:?} history entries", history.len());
+            match serde_json::from_reader::<_, Vec<Entry>>(file) {
+                Ok(entries) => {
+                    debug!("Imported {:?} history entries", entries.len());
 
-                    Ok(Tracker { path, history })
+                    Ok(Tracker {
+                        path,
+                        history: History::from_entries(entries),
+                    })
                 }
                 Err(err) => {
                     // ignore parsing errors
@@ -174,11 +201,6 @@ impl Tracker {
         load_inner(path)
     }
 
-    /// Pushes a new entry to the history
-    pub fn push(&mut self, entry: Entry) {
-        self.history.replace(entry);
-    }
-
     /// Saves the history, guaranteeing a size of `MAX_HISTORY_ENTRIES`
     pub fn store(self) -> Result<()> {
         fs::create_dir_all(
@@ -189,14 +211,14 @@ impl Tracker {
         let file = File::create(self.path)?;
 
         // since history is sorted, we can remove the first entries to limit the max size
-        let history: Vec<Entry> = self
+        let entries: Vec<Entry> = self
             .history
-            .0
+            .into_entries()
             .into_iter()
             .take(MAX_HISTORY_ENTRIES)
             .collect();
 
-        serde_json::to_writer_pretty(file, &history)?;
+        serde_json::to_writer_pretty(file, &entries)?;
         Ok(())
     }
 }
