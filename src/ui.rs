@@ -418,8 +418,8 @@ fn render(frame: &mut Frame, app: &mut UI) {
     let area = Layout::default()
         .constraints(
             [
-                Constraint::Min(3),
                 Constraint::Percentage(100),
+                Constraint::Min(3),
                 Constraint::Min(1),
                 Constraint::Min(1),
                 Constraint::Min(1),
@@ -442,16 +442,16 @@ fn render(frame: &mut Frame, app: &mut UI) {
         .unwrap_or(20)
         .clamp(9, 60);
 
-    render_search_input(frame, app, area[0]);
-
     // Render the main table
     render_table(
         frame,
         app,
-        area[1],
+        area[0],
         u16::try_from(longest_ws_name).unwrap_or(u16::MAX),
         u16::try_from(longest_dc_name).unwrap_or(u16::MAX),
     );
+
+    render_search_input(frame, app, area[1]);
 
     let selected: Option<Entry> = app.get_selected_row().map(|row| row.entry);
 
