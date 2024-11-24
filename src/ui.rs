@@ -392,7 +392,7 @@ fn handle_input(input: Event) -> Option<AppAction> {
         let is_char = |c: char| is_key(KeyCode::Char(c));
         let is_ctrl_char = |c: char| key.modifiers.contains(KeyModifiers::CONTROL) && is_char(c);
 
-        if is_key(KeyCode::Esc) || is_ctrl_char('q') {
+        if is_key(KeyCode::Esc) || is_ctrl_char('q') || is_ctrl_char('c') {
             return Some(AppAction::Quit);
         } else if is_key(KeyCode::Down) || is_ctrl_char('j') {
             return Some(AppAction::SelectNext);
@@ -540,7 +540,7 @@ fn render_status_area(frame: &mut Frame, selected: Option<&Entry>, status_area: 
     frame.render_widget(additional_info_par, status_area[1]);
 
     let instruction = Span::styled(
-        "Press CTRL+x to remove the selected item. Press CTRL+q to quit.",
+        "Press CTRL+X/DEL to remove the selected item. Press CTRL+C/ESC to quit.",
         Style::default().fg(Color::Gray),
     );
     let instructions_par = Paragraph::new(instruction)

@@ -123,6 +123,23 @@ Options:
   -h, --help                         Print help
 ```
 
+The following keybindings are available:
+
+##### Keybindings
+
+| Key/Key Combination             | Action                | Description                            |
+| ------------------------------- | --------------------- | -------------------------------------- |
+| `Esc`, `Ctrl+Q` or `Ctrl+C`   | Quit                  | Exits the application.
+| `Down` or `Ctrl+J`              | Select Next           | Moves to the next selectable item.     |
+| `Up` or `Ctrl+K`                | Select Previous       | Moves to the previous selectable item. |
+| `KeypadBegin` or `Ctrl+1`       | Select First          | Selects the first item.                |
+| `End` or `Ctrl+0`               | Select Last           | Selects the last item.                 |
+| `Enter` or `Ctrl+O`             | Open Selected         | Opens the currently selected item.     |
+| `Delete`, `Ctrl+R`, or `Ctrl+X` | Delete Selected Entry | Deletes the currently selected item.   |
+
+Note: If an input does not match any of the defined keybindings, it is treated as part of a search input.
+
+
 ##### Launch Behavior
 
 There are three launch behaviors:
@@ -187,17 +204,3 @@ You can open a CLI-based user interface to display a list of recently opened pro
 ```sh
 vscli recent                        # open the CLI-based UI to select a recently opened project to open
 ```
-
-##### Keybindings
-
-| Key/Key Combination             | Action                | Description                            |
-| ------------------------------- | --------------------- | -------------------------------------- |
-| `Esc` or `Ctrl+Q`               | Quit                  | Exits the application.                 |
-| `Down` or `Ctrl+J`              | Select Next           | Moves to the next selectable item.     |
-| `Up` or `Ctrl+K`                | Select Previous       | Moves to the previous selectable item. |
-| `KeypadBegin` or `Ctrl+1`       | Select First          | Selects the first item.                |
-| `End` or `Ctrl+0`               | Select Last           | Selects the last item.                 |
-| `Enter` or `Ctrl+O`             | Open Selected         | Opens the currently selected item.     |
-| `Delete`, `Ctrl+R`, or `Ctrl+X` | Delete Selected Entry | Deletes the currently selected item.   |
-
-Note: If an input does not match any of the defined keybindings, it is treated as part of a search input.
