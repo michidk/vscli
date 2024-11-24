@@ -511,7 +511,7 @@ fn render_table(
                 .borders(Borders::ALL)
                 .title("Recent Workspaces"),
         )
-        .highlight_style(selected_style)
+        .row_highlight_style(selected_style)
         .highlight_symbol("> ");
     frame.render_stateful_widget(table, area, &mut app.table_state);
 }
