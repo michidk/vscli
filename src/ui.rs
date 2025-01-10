@@ -7,8 +7,11 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use log::debug;
+use nucleo_matcher::{
+    pattern::{AtomKind, CaseMatching, Normalization, Pattern},
+    Matcher, Utf32Str,
+};
 use ratatui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Layout},
@@ -45,7 +48,7 @@ struct TableRow {
     id: EntryId,
     entry: Entry,
     row: Row<'static>,
-    search_score: Option<i64>,
+    search_score: Option<u32>,
 }
 
 impl From<(EntryId, Entry)> for TableRow {
@@ -142,27 +145,34 @@ impl TableData {
 
     pub fn apply_filter(&mut self, pattern: &str) -> bool {
         let mut changes = false;
+        let mut matcher = Matcher::default();
+        let mut buf = Vec::new();
 
-        let matcher = SkimMatcherV2::default();
+        let pattern = Pattern::new(
+            pattern,
+            CaseMatching::Ignore,
+            Normalization::Smart,
+            AtomKind::Fuzzy,
+        );
 
         for row in &mut self.rows {
+            let workspace_name = row.entry.workspace_name.as_str();
+            let container_name = row.entry.dev_container_name.as_deref().unwrap_or("");
+            let path_str = row.entry.workspace_path.to_string_lossy();
+
             let new_search_score = add_num_opt(
                 add_num_opt(
-                    matcher.fuzzy_match(&row.entry.workspace_name, pattern),
-                    matcher.fuzzy_match(
-                        row.entry.dev_container_name.as_deref().unwrap_or(""),
-                        pattern,
-                    ),
+                    pattern.score(Utf32Str::new(workspace_name, &mut buf), &mut matcher),
+                    pattern.score(Utf32Str::new(container_name, &mut buf), &mut matcher),
                 ),
-                matcher.fuzzy_match(&row.entry.workspace_path.to_string_lossy(), pattern),
+                pattern.score(Utf32Str::new(path_str.as_ref(), &mut buf), &mut matcher),
             );
             changes |= new_search_score != row.search_score;
             row.search_score = new_search_score;
         }
 
-        // Sort is done ASC (e.g. smallest value is first/top). Thats why we negate the score as normally the higher the score, the better the match.
         self.rows
-            .sort_by_key(|row| row.search_score.unwrap_or(i64::MIN).saturating_neg());
+            .sort_by_key(|row| u32::MAX - row.search_score.unwrap_or(0));
 
         changes
     }
@@ -594,10 +604,10 @@ fn render_additional_info(frame: &mut Frame, selected: Option<&Entry>, area: [Re
     frame.render_widget(dc_path_info_par, area[1]);
 }
 
-/// Adds two optional [`i64`]s.
+/// Adds two optional [`u32`]s.
 ///
 /// If at least one of the inputs is [`Option::Some`] then the result will also be [`Option::Some`].
-fn add_num_opt(o1: Option<i64>, o2: Option<i64>) -> Option<i64> {
+fn add_num_opt(o1: Option<u32>, o2: Option<u32>) -> Option<u32> {
     match (o1, o2) {
         (Some(n1), Some(n2)) => Some(n1 + n2),
         (Some(n), None) | (None, Some(n)) => Some(n),
