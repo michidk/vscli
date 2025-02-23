@@ -80,8 +80,8 @@ Commands:
 Options:
   -s, --history-path <HISTORY_PATH>  Overwrite the default path to the history file [env: HISTORY_PATH=]
   -d, --dry-run                      Whether to launch in dry-run mode (not actually open vscode) [env: DRY_RUN=]
-  -v, --verbose...                   More output per occurrence
-  -q, --quiet...                     Less output per occurrence
+  -v, --verbose...                   Increase logging verbosity
+  -q, --quiet...                     Decrease logging verbosity
   -h, --help                         Print help
   -V, --version                      Print version
 ```
@@ -95,17 +95,17 @@ Usage: vscli open [OPTIONS] [PATH] [ARGS]...
 
 Arguments:
   [PATH]     The path of the vscode project to open [default: .]
-  [ARGS]...  Additional arguments to pass to vscode [env: ARGS=]
+  [ARGS]...  Additional arguments to pass to the editor [env: ARGS=]
 
 Options:
-  -b, --behavior <BEHAVIOR>          Launch behavior [default: detect] [possible values: detect, force-container, force-classic]
+  -b, --behavior <BEHAVIOR>          Launch behavior [possible values: detect, force-container, force-classic]
   -s, --history-path <HISTORY_PATH>  Overwrite the default path to the history file [env: HISTORY_PATH=]
   -c, --config <CONFIG>              Overwrites the path to the dev container config file [env: CONFIG=]
-  -d, --dry-run                      Whether to launch in dry-run mode (not actually open vscode) [env: DRY_RUN=]
-  -n, --insiders                     Whether to launch the insider's version of vscode [env: INSIDERS=]
-  -v, --verbose...                   More output per occurrence
-  -q, --quiet...                     Less output per occurrence
-  -h, --help                         Print help (see more with '--help')
+  -d, --dry-run                      Whether to launch in dry-run mode [env: DRY_RUN=]
+      --command <COMMAND>            The editor command to use (e.g. "code", "code-insiders", "cursor") [env: COMMAND=]
+  -v, --verbose...                   Increase logging verbosity
+  -q, --quiet...                     Decrease logging verbosity
+  -h, --help                         Print help
 ```
 
 #### Recent UI
@@ -113,15 +113,23 @@ Options:
 Opens an interactive list of recently used workspaces.
 
 ```
-Usage: vscli recent [OPTIONS]
+Usage: vscli recent [OPTIONS] [ARGS]...
+
+Arguments:
+  [ARGS]...  Additional arguments to pass to the editor [env: ARGS=]
 
 Options:
+  -b, --behavior <BEHAVIOR>          Launch behavior [possible values: detect, force-container, force-classic]
   -s, --history-path <HISTORY_PATH>  Overwrite the default path to the history file [env: HISTORY_PATH=]
-  -d, --dry-run                      Whether to launch in dry-run mode (not actually open vscode) [env: DRY_RUN=]
-  -v, --verbose...                   More output per occurrence
-  -q, --quiet...                     Less output per occurrence
+  -c, --config <CONFIG>              Overwrites the path to the dev container config file [env: CONFIG=]
+  -d, --dry-run                      Whether to launch in dry-run mode [env: DRY_RUN=]
+      --command <COMMAND>            The editor command to use (e.g. "code", "code-insiders", "cursor") [env: COMMAND=]
+  -v, --verbose...                   Increase logging verbosity
+  -q, --quiet...                     Decrease logging verbosity
   -h, --help                         Print help
 ```
+
+Both the `open` and `recent` commands share the same set of launch arguments, allowing you to customize how the editor is launched.
 
 The following keybindings are available:
 
