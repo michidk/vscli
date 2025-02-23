@@ -1,7 +1,7 @@
 use std::{ffi::OsString, fmt::Display, path::PathBuf, str::FromStr};
 
 use clap::ValueEnum;
-use color_eyre::eyre::{self, bail, eyre, Result};
+use color_eyre::eyre::{self, Result, bail, eyre};
 use inquire::Select;
 use log::{info, trace};
 use serde::{Deserialize, Serialize};

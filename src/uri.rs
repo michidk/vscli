@@ -1,4 +1,4 @@
-use serde::{ser::SerializeMap, Serialize};
+use serde::{Serialize, ser::SerializeMap};
 use url::Url;
 
 /// Represents a single file path to a dev container config as expected by the code CLI.

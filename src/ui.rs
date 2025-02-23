@@ -5,21 +5,21 @@ use crossterm::{
         self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
     },
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use log::debug;
 use nucleo_matcher::{
-    pattern::{AtomKind, CaseMatching, Normalization, Pattern},
     Matcher, Utf32Str,
+    pattern::{AtomKind, CaseMatching, Normalization, Pattern},
 };
 use ratatui::{
+    Frame, Terminal,
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Layout},
     prelude::{Alignment, Direction, Rect},
     style::{Color, Style},
     text::Span,
     widgets::{Block, Borders, Cell, Padding, Paragraph, Row, Table, TableState},
-    Frame, Terminal,
 };
 use std::{borrow::Cow, io, rc::Rc};
 use tui_textarea::TextArea;
@@ -246,14 +246,17 @@ impl<'a> UI<'a> {
         if let Some(selected) = prev_selected {
             let new_rows = self.table_data.as_rows_full();
 
-            if let Some(index) = new_rows
+            match new_rows
                 .enumerate()
                 .find_map(|(index, entry)| (entry.id == selected.id).then_some(index))
             {
-                // Update index
-                self.table_state.select(Some(index));
-            } else {
-                self.table_state.select_first();
+                Some(index) => {
+                    // Update index
+                    self.table_state.select(Some(index));
+                }
+                _ => {
+                    self.table_state.select_first();
+                }
             }
         } else {
             self.table_state.select_first();

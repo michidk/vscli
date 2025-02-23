@@ -1,6 +1,6 @@
 use std::{ffi::OsString, path::PathBuf};
 
-use clap::{command, Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, command};
 
 use crate::launch::ContainerStrategy;
 

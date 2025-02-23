@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use color_eyre::eyre::{eyre, Context, Result};
+use color_eyre::eyre::{Context, Result, eyre};
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use std::{

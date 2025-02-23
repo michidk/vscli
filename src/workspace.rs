@@ -1,4 +1,4 @@
-use color_eyre::eyre::{bail, eyre, Result, WrapErr};
+use color_eyre::eyre::{Result, WrapErr, bail, eyre};
 use log::{debug, trace};
 use std::ffi::OsString;
 use std::fmt::Display;
