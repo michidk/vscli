@@ -1,6 +1,6 @@
 # vscli
 
-[![MIT License](https://img.shields.io/crates/l/vscli)](https://choosealicense.com/licenses/mit/) [![Continuous integration](https://github.com/michidk/vscli/workflows/Continuous%20Integration/badge.svg)](https://github.com/michidk/vscli/actions)
+[![MIT License](https://img.shields.io/crates/l/vscli)](https://choosealicense.com/licenses/mit/) [![Continuous integration](https://github.com/michidk/vscli/actions/workflows/ci.yml/badge.svg)](https://github.com/michidk/vscli/actions/workflows/ci.yml)
 
 A CLI/TUI which makes it easy to launch [Visual Studio Code](https://code.visualstudio.com/) (vscode) projects, with a focus on [dev containers](https://containers.dev/).
 
