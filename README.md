@@ -2,7 +2,7 @@
 
 [![MIT License](https://img.shields.io/crates/l/vscli)](https://choosealicense.com/licenses/mit/) [![Continuous integration](https://github.com/michidk/vscli/actions/workflows/ci.yml/badge.svg)](https://github.com/michidk/vscli/actions/workflows/ci.yml)
 
-A CLI/TUI which makes it easy to launch [Visual Studio Code](https://code.visualstudio.com/) (vscode) projects, with a focus on [dev containers](https://containers.dev/).
+A CLI/TUI which makes it easy to launch [Visual Studio Code](https://code.visualstudio.com/) (vscode) [dev containers](https://containers.dev/). Also supports other editors like [Cursor](https://www.cursor.com/).
 
 ![Screenshot showing the recent UI feature.](.github/images/recent.png)
 
@@ -11,9 +11,9 @@ Read [here](https://blog.lohr.dev/launching-dev-containers) about the journey of
 ## Features
 
 - A shorthand for launching vscode projects (to be used like the `code` command but with dev container support)
+- Supports different editors like `vscode`, `vscode-insiders`, `cursor` and other vscode forks
 - Detects whether a project is a [dev container](https://containers.dev/) project, and launches the dev container instead
 - Supports [multiple dev containers](https://github.com/microsoft/vscode-docs/blob/main/remote-release-notes/v1_75.md#folders-with-multiple-devcontainerjson-files) in the same project
-- Supports the [insiders](https://code.visualstudio.com/insiders/) version of vscode
 - Tracks your projects and allows you to open them using a CLI-based UI
 
 ## Installation
@@ -182,25 +182,38 @@ vscli open --behavior force-classic .    # force open vscode without a dev conta
 When you open a project containing more than one dev container config, you will be prompted to select one:
 ![Screenshot showing the dev container selection UI.](.github/images/select.png)
 
-
-You can launch the insiders version of vscode using the `--insiders` flag:
-
-```sh
-vscli open --insiders .              # open vscode insiders in the current directory
-```
-
-Additional arguments can be passed to the `code` executable, by specifying them after `--`:
+You can specify which editor command to use with the `--command` flag:
 
 ```sh
-vscli open . -- --disable-gpu        # open vscode in the current directory without GPU hardware acceleration
+vscli open --command cursor .        # open using cursor editor
+vscli open --command code .          # open using vscode (default)
+vscli open --command code-insiders . # open using vscode insiders
 ```
 
-Read more about the `code` flags, by executing `code --help`.
+Additional arguments can be passed to the editor executable, by specifying them after `--`:
+
+```sh
+vscli open . -- --disable-gpu        # open the current directory without GPU hardware acceleration
+```
+
+Read more about the editor flags by executing `code --help` (or `cursor --help`, etc).
 
 #### CLI UI
 
 You can open a CLI-based user interface to display a list of recently opened projects using the `recent` command:
 
 ```sh
-vscli recent                        # open the CLI-based UI to select a recently opened project to open
+vscli recent                                    # open the CLI-based UI to select a recently opened project to open
+vscli recent --command cursor                   # open the selected project with cursor, ignoring the editor stored in history
+vscli recent --behavior force-container         # force open the selected project in a dev container
+vscli recent --command cursor --behavior detect # open with cursor and detect if dev container should be used
+vscli recent --config .devcontainer/custom.json # open with a specific dev container config
+vscli recent -- --disable-gpu                   # pass additional arguments to the editor
 ```
+
+Both the `open` and `recent` commands support the same set of launch arguments:
+
+- `--command`: Specify which editor command to use (e.g., "code", "code-insiders", "cursor")
+- `--behavior`: Set the launch behavior ("detect", "force-container", "force-classic")
+- `--config`: Override the path to the dev container config file
+- Additional arguments can be passed to the editor executable by specifying them after `--`

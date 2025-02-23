@@ -64,16 +64,27 @@ impl Display for ContainerStrategy {
 /// Is saved in the history file.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Behavior {
+    /// The strategy to use for launching the container.
     pub strategy: ContainerStrategy,
-    pub insiders: bool,
+    /// Additional arguments to pass to the editor.
     pub args: Vec<OsString>,
+    /// The editor command to use (e.g. "code", "code-insiders", "cursor")
+    #[serde(default = "default_editor_command")]
+    pub command: String,
+}
+
+fn default_editor_command() -> String {
+    "code".to_string()
 }
 
 /// The configuration for the launch behavior of vscode.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Setup {
+    /// The workspace configuration.
     workspace: Workspace,
+    /// The behavior configuration.
     behavior: Behavior,
+    /// Whether to perform a dry run, not actually launching the editor.
     dry_run: bool,
 }
 
@@ -125,19 +136,22 @@ impl Setup {
                 let dev_container = self.detect(config)?;
 
                 if let Some(ref dev_container) = dev_container {
-                    info!("Opening dev container...");
+                    info!("Opening dev container with {}...", self.behavior.command);
                     self.workspace.open(
                         self.behavior.args,
-                        self.behavior.insiders,
                         self.dry_run,
                         dev_container,
+                        &self.behavior.command,
                     )?;
                 } else {
-                    info!("No dev container found, opening on host system...");
+                    info!(
+                        "No dev container found, opening on host system with {}...",
+                        self.behavior.command
+                    );
                     self.workspace.open_classic(
                         self.behavior.args,
-                        self.behavior.insiders,
                         self.dry_run,
+                        &self.behavior.command,
                     )?;
                 }
                 Ok(dev_container)
@@ -146,12 +160,15 @@ impl Setup {
                 let dev_container = self.detect(config)?;
 
                 if let Some(ref dev_container) = dev_container {
-                    info!("Force opening dev container...");
+                    info!(
+                        "Force opening dev container with {}...",
+                        self.behavior.command
+                    );
                     self.workspace.open(
                         self.behavior.args,
-                        self.behavior.insiders,
                         self.dry_run,
                         dev_container,
+                        &self.behavior.command,
                     )?;
                 } else {
                     bail!(
@@ -161,11 +178,14 @@ impl Setup {
                 Ok(dev_container)
             }
             ContainerStrategy::ForceClassic => {
-                info!("Opening vscode without dev containers...");
+                info!(
+                    "Opening without dev containers using {}...",
+                    self.behavior.command
+                );
                 self.workspace.open_classic(
                     self.behavior.args,
-                    self.behavior.insiders,
                     self.dry_run,
+                    &self.behavior.command,
                 )?;
                 Ok(None)
             }

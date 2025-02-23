@@ -56,13 +56,7 @@ fn main() -> Result<()> {
     };
 
     match opts.command {
-        opts::Commands::Open {
-            path,
-            args,
-            behavior,
-            config,
-            insiders,
-        } => {
+        opts::Commands::Open { path, launch } => {
             // Get workspace from args
             let path = path.as_path();
             let ws = Workspace::from_path(path)?;
@@ -70,12 +64,12 @@ fn main() -> Result<()> {
 
             // Open the container
             let behavior = Behavior {
-                strategy: behavior,
-                insiders,
-                args: args.clone(),
+                strategy: launch.behavior.unwrap_or_default(),
+                args: launch.args,
+                command: launch.command.unwrap_or_else(|| "code".to_string()),
             };
             let setup = Setup::new(ws, behavior.clone(), opts.dry_run);
-            let dev_container = setup.launch(config)?;
+            let dev_container = setup.launch(launch.config)?;
 
             // Store the workspace in the history
             tracker.history.upsert(Entry {
@@ -87,12 +81,32 @@ fn main() -> Result<()> {
                 last_opened: Utc::now(),
             });
         }
-        opts::Commands::Recent => {
+        opts::Commands::Recent { launch } => {
             // Get workspace from user selection
             let res = ui::start(&mut tracker)?;
-            if let Some((id, entry)) = res {
+            if let Some((id, mut entry)) = res {
                 let ws = Workspace::from_path(&entry.workspace_path)?;
                 let ws_name = ws.name.clone();
+
+                // Override command if specified
+                if let Some(cmd) = launch.command {
+                    entry.behavior.command = cmd;
+                }
+
+                // Override behavior if specified
+                if let Some(beh) = launch.behavior {
+                    entry.behavior.strategy = beh;
+                }
+
+                // Override args if specified and non-empty
+                if !launch.args.is_empty() {
+                    entry.behavior.args = launch.args;
+                }
+
+                // Override config if specified
+                if launch.config.is_some() {
+                    entry.config_path = launch.config;
+                }
 
                 // Open the container
                 let setup = Setup::new(ws, entry.behavior.clone(), opts.dry_run);

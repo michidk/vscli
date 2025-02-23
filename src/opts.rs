@@ -1,6 +1,6 @@
 use std::{ffi::OsString, path::PathBuf};
 
-use clap::{command, Parser, Subcommand};
+use clap::{command, Args, Parser, Subcommand};
 
 use crate::launch::ContainerStrategy;
 
@@ -31,6 +31,26 @@ pub(crate) struct Opts {
     pub command: Commands,
 }
 
+/// Arguments for launching an editor
+#[derive(Args, Debug, Clone)]
+pub(crate) struct LaunchArgs {
+    /// Additional arguments to pass to the editor
+    #[arg(value_parser, env)]
+    pub args: Vec<OsString>,
+
+    /// Launch behavior
+    #[arg(short, long, ignore_case = true)]
+    pub behavior: Option<ContainerStrategy>,
+
+    /// Overwrites the path to the dev container config file
+    #[arg(short, long, env)]
+    pub config: Option<PathBuf>,
+
+    /// The editor command to use (e.g. "code", "code-insiders", "cursor")
+    #[arg(long, env)]
+    pub command: Option<String>,
+}
+
 #[derive(Subcommand, Debug)]
 pub(crate) enum Commands {
     /// Opens a dev container.
@@ -40,23 +60,13 @@ pub(crate) enum Commands {
         #[arg(value_parser, default_value = ".")]
         path: PathBuf,
 
-        /// Additional arguments to pass to vscode
-        #[arg(value_parser, env)]
-        args: Vec<OsString>,
-
-        /// Launch behavior
-        #[arg(short, long, default_value_t = ContainerStrategy::Detect, ignore_case = true)]
-        behavior: ContainerStrategy,
-
-        /// Overwrites the path to the dev container config file
-        #[arg(short, long, env)]
-        config: Option<PathBuf>,
-
-        /// Whether to launch the insider's version of vscode
-        #[arg(short = 'n', long, env)]
-        insiders: bool,
+        #[command(flatten)]
+        launch: LaunchArgs,
     },
     /// Opens an interactive list of recently used workspaces.
     #[clap(alias = "ui")]
-    Recent,
+    Recent {
+        #[command(flatten)]
+        launch: LaunchArgs,
+    },
 }

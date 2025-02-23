@@ -167,9 +167,9 @@ impl Workspace {
     pub fn open(
         &self,
         mut args: Vec<OsString>,
-        insiders: bool,
         dry_run: bool,
         dev_container: &DevContainer,
+        command: &str,
     ) -> Result<()> {
         // Checking if '--folder-uri' is present in the arguments
         if args.iter().any(|arg| arg == "--folder-uri") {
@@ -245,7 +245,7 @@ impl Workspace {
         args.push(OsString::from("--folder-uri"));
         args.push(OsString::from(uri.as_str()));
 
-        exec_code(args, insiders, dry_run)
+        exec_code(args, dry_run, command)
             .wrap_err_with(|| "Error opening vscode using dev container...")
     }
 
@@ -253,44 +253,36 @@ impl Workspace {
     pub fn open_classic(
         &self,
         mut args: Vec<OsString>,
-        insiders: bool,
         dry_run: bool,
+        command: &str,
     ) -> Result<()> {
         trace!("path: {}", self.path.display());
         trace!("args: {:?}", args);
 
         args.insert(0, self.path.as_os_str().to_owned());
-        exec_code(args, insiders, dry_run)
+        exec_code(args, dry_run, command)
             .wrap_err_with(|| "Error opening vscode the classic way...")
     }
 }
 
 /// Executes the vscode executable with the given arguments on Unix.
 #[cfg(unix)]
-fn exec_code(args: Vec<OsString>, insiders: bool, dry_run: bool) -> Result<()> {
-    let cmd = if insiders { "code-insiders" } else { "code" };
+fn exec_code(args: Vec<OsString>, dry_run: bool, command: &str) -> Result<()> {
     // test if cmd exists
-    Command::new(cmd)
+    Command::new(command)
         .arg("-v")
         .output()
-        .wrap_err_with(|| format!("`{cmd}` does not exists."))?;
+        .wrap_err_with(|| format!("`{command}` does not exists."))?;
 
-    run(cmd, args, dry_run)
+    run(command, args, dry_run)
 }
 
 /// Executes the vscode executable with the given arguments on Windows.
 #[cfg(windows)]
-fn exec_code(mut args: Vec<OsString>, insiders: bool, dry_run: bool) -> Result<()> {
+fn exec_code(mut args: Vec<OsString>, dry_run: bool, command: &str) -> Result<()> {
     let cmd = "cmd";
     args.insert(0, OsString::from("/c"));
-    args.insert(
-        1,
-        if insiders {
-            OsString::from("code-insiders")
-        } else {
-            OsString::from("code")
-        },
-    );
+    args.insert(1, OsString::from(command));
 
     // test if cmd exists
     Command::new(cmd)

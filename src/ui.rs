@@ -533,13 +533,11 @@ fn render_status_area(frame: &mut Frame, selected: Option<&Entry>, status_area: 
         |entry| entry.behavior.strategy.to_string(),
     );
 
-    let insiders = selected.map_or_else(
-        || String::from("-"),
-        |entry| entry.behavior.insiders.to_string(),
-    );
+    let command =
+        selected.map_or_else(|| String::from("-"), |entry| entry.behavior.command.clone());
 
     let additional_info = Span::styled(
-        format!("Strategy: {strategy}, Insiders: {insiders}"),
+        format!("Strategy: {strategy}, Command: {command}"),
         Style::default().fg(Color::DarkGray),
     );
 
