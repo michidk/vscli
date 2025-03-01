@@ -34,21 +34,21 @@ pub(crate) struct Opts {
 /// Arguments for launching an editor
 #[derive(Args, Debug, Clone)]
 pub(crate) struct LaunchArgs {
-    /// Additional arguments to pass to the editor
-    #[arg(value_parser, env)]
-    pub args: Vec<OsString>,
+    /// The editor command to use (e.g. "code", "code-insiders", "cursor")
+    #[arg(short, long, env)]
+    pub command: Option<String>,
 
     /// Launch behavior
     #[arg(short, long, ignore_case = true)]
     pub behavior: Option<ContainerStrategy>,
 
     /// Overwrites the path to the dev container config file
-    #[arg(short, long, env)]
+    #[arg(long, env)]
     pub config: Option<PathBuf>,
 
-    /// The editor command to use (e.g. "code", "code-insiders", "cursor")
-    #[arg(long, env)]
-    pub command: Option<String>,
+    /// Additional arguments to pass to the editor
+    #[arg(value_parser, env)]
+    pub args: Vec<OsString>,
 }
 
 #[derive(Subcommand, Debug)]
