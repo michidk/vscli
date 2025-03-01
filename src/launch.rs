@@ -80,8 +80,11 @@ fn default_editor_command() -> String {
 fn format_editor_name(command: &str) -> String {
     match command.to_lowercase().as_str() {
         "code" => "Visual Studio Code".to_string(),
+        "code-insiders" => "Visual Studio Code Insiders".to_string(),
         "cursor" => "Cursor".to_string(),
-        _ => format!("'{}'", command),
+        "codium" => "VSCodium".to_string(),
+        "positron" => "Positron".to_string(),
+        _ => format!("'{command}'"),
     }
 }
 
