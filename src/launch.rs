@@ -60,8 +60,7 @@ impl Display for ContainerStrategy {
     }
 }
 
-/// The launch behavior that is used to start vscode.
-/// Is saved in the history file.
+/// The launch behavior that is used to start vscode (saved in the history file)
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct Behavior {
     /// The strategy to use for launching the container.
@@ -78,8 +77,6 @@ fn default_editor_command() -> String {
 }
 
 /// Formats the editor name based on the command for display in messages.
-/// Returns "Visual Studio Code" for "code", "Cursor" for "cursor",
-/// and the command itself in quotes for other commands.
 fn format_editor_name(command: &str) -> String {
     match command.to_lowercase().as_str() {
         "code" => "Visual Studio Code".to_string(),
@@ -88,7 +85,7 @@ fn format_editor_name(command: &str) -> String {
     }
 }
 
-/// The configuration for the launch behavior of vscode.
+/// The configuration for the launch behavior
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Setup {
     /// The workspace configuration.
