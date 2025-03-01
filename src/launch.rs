@@ -77,6 +77,17 @@ fn default_editor_command() -> String {
     "code".to_string()
 }
 
+/// Formats the editor name based on the command for display in messages.
+/// Returns "Visual Studio Code" for "code", "Cursor" for "cursor",
+/// and the command itself in quotes for other commands.
+fn format_editor_name(command: &str) -> String {
+    match command.to_lowercase().as_str() {
+        "code" => "Visual Studio Code".to_string(),
+        "cursor" => "Cursor".to_string(),
+        _ => format!("'{}'", command),
+    }
+}
+
 /// The configuration for the launch behavior of vscode.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Setup {
@@ -131,12 +142,14 @@ impl Setup {
     /// Launches vscode with the given configuration.
     /// Returns the dev container that was used, if any.
     pub fn launch(self, config: Option<PathBuf>) -> Result<Option<DevContainer>> {
+        let editor_name = format_editor_name(&self.behavior.command);
+
         match self.behavior.strategy {
             ContainerStrategy::Detect => {
                 let dev_container = self.detect(config)?;
 
                 if let Some(ref dev_container) = dev_container {
-                    info!("Opening dev container with {}...", self.behavior.command);
+                    info!("Opening dev container with {}...", editor_name);
                     self.workspace.open(
                         self.behavior.args,
                         self.dry_run,
@@ -146,7 +159,7 @@ impl Setup {
                 } else {
                     info!(
                         "No dev container found, opening on host system with {}...",
-                        self.behavior.command
+                        editor_name
                     );
                     self.workspace.open_classic(
                         self.behavior.args,
@@ -160,10 +173,7 @@ impl Setup {
                 let dev_container = self.detect(config)?;
 
                 if let Some(ref dev_container) = dev_container {
-                    info!(
-                        "Force opening dev container with {}...",
-                        self.behavior.command
-                    );
+                    info!("Force opening dev container with {}...", editor_name);
                     self.workspace.open(
                         self.behavior.args,
                         self.dry_run,
@@ -178,10 +188,7 @@ impl Setup {
                 Ok(dev_container)
             }
             ContainerStrategy::ForceClassic => {
-                info!(
-                    "Opening without dev containers using {}...",
-                    self.behavior.command
-                );
+                info!("Opening without dev containers using {}...", editor_name);
                 self.workspace.open_classic(
                     self.behavior.args,
                     self.dry_run,
