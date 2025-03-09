@@ -208,14 +208,26 @@ impl<'a> UI<'a> {
         }
     }
 
-    /// Select the next entry
+    /// Select the next entry with wrapping
     pub fn select_next(&mut self) {
-        self.table_state.select_next();
+        let len = self.table_data.as_rows_full().count();
+        if len == 0 {
+            return;
+        }
+
+        let i = self.table_state.selected().unwrap_or(0);
+        self.table_state.select(Some((i + 1) % len));
     }
 
-    /// Select the previous entry
+    /// Select the previous entry with wrapping
     pub fn select_previous(&mut self) {
-        self.table_state.select_previous();
+        let len = self.table_data.as_rows_full().count();
+        if len == 0 {
+            return;
+        }
+
+        let i = self.table_state.selected().unwrap_or(len - 1);
+        self.table_state.select(Some((i + len - 1) % len));
     }
 
     pub fn select_first(&mut self) {
