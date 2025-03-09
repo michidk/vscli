@@ -19,7 +19,7 @@ use ratatui::{
     prelude::{Alignment, Rect},
     style::{Color, Style},
     text::Span,
-    widgets::{Block, Borders, Cell, Padding, Paragraph, Row, Table, TableState},
+    widgets::{Block, Borders, Cell, Padding, Paragraph, Row, Table, TableState, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 use std::{borrow::Cow, io};
 use tui_textarea::TextArea;
@@ -557,6 +557,31 @@ fn render_table(
         .row_highlight_style(selected_style)
         .highlight_symbol("> ");
     frame.render_stateful_widget(table, area, &mut app.table_state);
+
+    // Calculate scrollbar state
+    let total_items = app.table_data.as_rows_full().count();
+    let viewport_height = (area.height - 2) as usize; // Subtract 2 for borders
+    let mut scrollbar_state = ScrollbarState::default()
+        .content_length(total_items)
+        .viewport_content_length(viewport_height)
+        .position(app.table_state.selected().unwrap_or(0));
+
+    // Create a new area for the scrollbar that overlaps with the right border
+    let scrollbar_area = Rect {
+        x: area.x + area.width - 1, // Place on the right border
+        y: area.y + 2,              // Start two lines below the top (one line after header)
+        width: 1,
+        height: area.height - 3,    // Account for top border + header and bottom border
+    };
+
+    // Render scrollbar
+    frame.render_stateful_widget(
+        Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓")),
+        scrollbar_area,
+        &mut scrollbar_state,
+    );
 }
 
 /// Renders the status area and additional info
