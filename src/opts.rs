@@ -66,6 +66,14 @@ pub(crate) enum Commands {
     /// Opens an interactive list of recently used workspaces.
     #[clap(alias = "ui")]
     Recent {
+        /// Hide the instruction message in the UI
+        #[arg(long)]
+        hide_instructions: bool,
+
+        /// Hide additional information like strategy, command, args and dev container path in the UI
+        #[arg(long)]
+        hide_info: bool,
+
         #[command(flatten)]
         launch: LaunchArgs,
     },

@@ -16,12 +16,12 @@ use ratatui::{
     Frame, Terminal,
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Layout},
-    prelude::{Alignment, Direction, Rect},
+    prelude::{Alignment, Rect},
     style::{Color, Style},
     text::Span,
     widgets::{Block, Borders, Cell, Padding, Paragraph, Row, Table, TableState},
 };
-use std::{borrow::Cow, io, rc::Rc};
+use std::{borrow::Cow, io};
 use tui_textarea::TextArea;
 
 use crate::history::{Entry, EntryId, History, Tracker};
@@ -194,17 +194,21 @@ struct UI<'a> {
     search: TextArea<'a>,
     table_state: TableState,
     table_data: TableData,
+    hide_instructions: bool,
+    hide_info: bool,
 }
 
 impl<'a> UI<'a> {
     /// Create new empty state from history tracker reference
-    pub fn new(history: &History) -> UI<'a> {
+    pub fn new(history: &History, hide_instructions: bool, hide_info: bool) -> UI<'a> {
         UI {
             search: TextArea::default(),
             table_state: TableState::default(),
             table_data: TableData::from_iter(
                 history.iter().map(|(id, entry)| (*id, entry.clone())),
             ),
+            hide_instructions,
+            hide_info,
         }
     }
 
@@ -314,7 +318,11 @@ impl<'a> UI<'a> {
 }
 
 /// Starts the UI and returns the selected/resulting entry
-pub(crate) fn start(tracker: &mut Tracker) -> Result<Option<(EntryId, Entry)>> {
+pub(crate) fn start(
+    tracker: &mut Tracker,
+    hide_instructions: bool,
+    hide_info: bool,
+) -> Result<Option<(EntryId, Entry)>> {
     debug!("Starting UI...");
 
     // setup terminal
@@ -327,7 +335,11 @@ pub(crate) fn start(tracker: &mut Tracker) -> Result<Option<(EntryId, Entry)>> {
     let mut terminal = Terminal::new(backend)?;
 
     // create app and run it
-    let res = run_app(&mut terminal, UI::new(&tracker.history), tracker);
+    let res = run_app(
+        &mut terminal,
+        UI::new(&tracker.history, hide_instructions, hide_info),
+        tracker,
+    );
 
     // restore terminal
     disable_raw_mode()?;
@@ -440,17 +452,24 @@ fn handle_input(input: Event) -> Option<AppAction> {
 /// Main render function
 fn render(frame: &mut Frame, app: &mut UI) {
     // Setup crossterm UI layout & style
+    let constraints = if app.hide_info {
+        vec![
+            Constraint::Percentage(100),
+            Constraint::Min(3),
+            Constraint::Min(1),
+        ]
+    } else {
+        vec![
+            Constraint::Percentage(100),
+            Constraint::Min(3),
+            Constraint::Min(1),
+            Constraint::Min(1),
+            Constraint::Min(1),
+        ]
+    };
+
     let area = Layout::default()
-        .constraints(
-            [
-                Constraint::Percentage(100),
-                Constraint::Min(3),
-                Constraint::Min(1),
-                Constraint::Min(1),
-                Constraint::Min(1),
-            ]
-            .as_ref(),
-        )
+        .constraints(&constraints)
         .horizontal_margin(1)
         .split(frame.area());
 
@@ -480,15 +499,14 @@ fn render(frame: &mut Frame, app: &mut UI) {
 
     let selected: Option<Entry> = app.get_selected_row().map(|row| row.entry);
 
-    // Render status area
-    let status_area: Rc<[Rect]> = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)].as_ref())
-        .split(area[2]);
-    render_status_area(frame, selected.as_ref(), &status_area);
-
-    // Render additional info like args and dev container path
-    render_additional_info(frame, selected.as_ref(), [area[3], area[4]]);
+    // Render status area and additional info
+    render_status_area(
+        frame,
+        selected.as_ref(),
+        &area[2..],
+        app.hide_instructions,
+        app.hide_info,
+    );
 }
 
 fn render_search_input(frame: &mut Frame, app: &mut UI, area: Rect) {
@@ -541,80 +559,82 @@ fn render_table(
     frame.render_stateful_widget(table, area, &mut app.table_state);
 }
 
-/// Renders the status area
-fn render_status_area(frame: &mut Frame, selected: Option<&Entry>, status_area: &Rc<[Rect]>) {
-    let strategy = selected.map_or_else(
-        || String::from("-"),
-        |entry| entry.behavior.strategy.to_string(),
-    );
+/// Renders the status area and additional info
+fn render_status_area(
+    frame: &mut Frame,
+    selected: Option<&Entry>,
+    areas: &[Rect],
+    hide_instructions: bool,
+    hide_info: bool,
+) {
+    // Render instructions using full width if not hidden
+    if !hide_instructions {
+        let instruction = Span::styled(
+            "↑/↓ to navigate • Del/Ctrl+X to remove • Enter to open • Type to filter • Esc/Ctrl+C to quit",
+            Style::default().fg(Color::Gray),
+        );
+        let instructions_par = Paragraph::new(instruction)
+            .block(Block::default().padding(Padding::new(2, 2, 0, 0)))
+            .alignment(Alignment::Left);
+        frame.render_widget(instructions_par, areas[0]);
+    }
 
-    let command =
-        selected.map_or_else(|| String::from("-"), |entry| entry.behavior.command.clone());
+    // Render additional info if not hidden and we have more areas
+    if !hide_info && areas.len() > 1 {
+        // Strategy, command and args info
+        let strategy = selected.map_or_else(
+            || String::from("-"),
+            |entry| entry.behavior.strategy.to_string(),
+        );
 
-    let additional_info = Span::styled(
-        format!("Strategy: {strategy}, Command: {command}"),
-        Style::default().fg(Color::DarkGray),
-    );
+        let command =
+            selected.map_or_else(|| String::from("-"), |entry| entry.behavior.command.clone());
 
-    let status_block = Block::default().padding(Padding::new(2, 2, 0, 0));
-    let additional_info_par = Paragraph::new(additional_info)
-        .block(status_block.clone())
-        .alignment(Alignment::Right);
-    frame.render_widget(additional_info_par, status_area[1]);
+        let args_count = selected.map_or(0, |entry| entry.behavior.args.len());
+        let args = selected.map_or_else(
+            || String::from("-"),
+            |entry| {
+                let converted_str: Vec<Cow<'_, str>> = entry
+                    .behavior
+                    .args
+                    .iter()
+                    .map(|arg| arg.to_string_lossy())
+                    .collect();
+                converted_str.join(", ")
+            },
+        );
 
-    let instruction = Span::styled(
-        "Press CTRL+X/DEL to remove the selected item. Press CTRL+C/ESC to quit.",
-        Style::default().fg(Color::Gray),
-    );
-    let instructions_par = Paragraph::new(instruction)
-        .block(status_block)
-        .alignment(Alignment::Left);
-    frame.render_widget(instructions_par, status_area[0]);
-}
+        let additional_info = Span::styled(
+            format!("Strategy: {strategy} • Command: {command} • Args ({args_count}): {args}"),
+            Style::default().fg(Color::DarkGray),
+        );
 
-/// Renders additional information like args and dev container path
-fn render_additional_info(frame: &mut Frame, selected: Option<&Entry>, area: [Rect; 2]) {
-    // Args
+        let status_block = Block::default().padding(Padding::new(2, 2, 0, 0));
+        let additional_info_par = Paragraph::new(additional_info)
+            .block(status_block)
+            .alignment(Alignment::Left);
+        frame.render_widget(additional_info_par, areas[1]);
 
-    let args_count = selected.map_or(0, |entry| entry.behavior.args.len());
+        // Dev container path
+        if areas.len() > 2 {
+            let dc_path = selected.map_or_else(String::new, |entry| {
+                entry
+                    .config_path
+                    .as_ref()
+                    .map(|f| f.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            });
+            let dc_path_info = Span::styled(
+                format!("Dev Container: {dc_path}"),
+                Style::default().fg(Color::DarkGray),
+            );
+            let dc_path_info_par = Paragraph::new(dc_path_info)
+                .block(Block::default().padding(Padding::new(2, 2, 0, 0)))
+                .alignment(Alignment::Left);
 
-    let args = selected.map_or_else(
-        || String::from("-"),
-        |entry| {
-            let converted_str: Vec<Cow<'_, str>> = entry
-                .behavior
-                .args
-                .iter()
-                .map(|arg| arg.to_string_lossy())
-                .collect();
-            converted_str.join(", ")
-        },
-    );
-
-    let args_info = Span::styled(
-        format!("Args ({args_count}): {args}"),
-        Style::default().fg(Color::DarkGray),
-    );
-    let args_info_par = Paragraph::new(args_info)
-        .block(Block::default().padding(Padding::new(2, 2, 0, 0)))
-        .alignment(Alignment::Right);
-    frame.render_widget(args_info_par, area[0]);
-
-    // Dev container path
-    let dc_path = selected.map_or_else(String::new, |entry| {
-        entry
-            .config_path
-            .as_ref()
-            .map(|f| f.to_string_lossy().into_owned())
-            .unwrap_or_default()
-    });
-    let dc_path_info = Span::styled(
-        format!("Dev Container: {dc_path}"),
-        Style::default().fg(Color::DarkGray),
-    );
-    let dc_path_info_par = Paragraph::new(dc_path_info).block(Block::default());
-
-    frame.render_widget(dc_path_info_par, area[1]);
+            frame.render_widget(dc_path_info_par, areas[2]);
+        }
+    }
 }
 
 /// Adds two optional [`u32`]s.

@@ -98,14 +98,14 @@ Arguments:
   [ARGS]...  Additional arguments to pass to the editor [env: ARGS=]
 
 Options:
-  -b, --behavior <BEHAVIOR>          Launch behavior [possible values: detect, force-container, force-classic]
+  -c, --command <COMMAND>            The editor command to use (e.g. "code", "code-insiders", "cursor") [env: COMMAND=]
   -s, --history-path <HISTORY_PATH>  Overwrite the default path to the history file [env: HISTORY_PATH=]
-  -c, --config <CONFIG>              Overwrites the path to the dev container config file [env: CONFIG=]
-  -d, --dry-run                      Whether to launch in dry-run mode [env: DRY_RUN=]
-      --command <COMMAND>            The editor command to use (e.g. "code", "code-insiders", "cursor") [env: COMMAND=]
+  -b, --behavior <BEHAVIOR>          Launch behavior [possible values: detect, force-container, force-classic]
+  -d, --dry-run                      Whether to launch in dry-run mode (not actually open vscode) [env: DRY_RUN=]
+      --config <CONFIG>              Overwrites the path to the dev container config file [env: CONFIG=]
   -v, --verbose...                   Increase logging verbosity
   -q, --quiet...                     Decrease logging verbosity
-  -h, --help                         Print help
+  -h, --help                         Print help (see more with '--help')
 ```
 
 #### Recent UI
@@ -119,19 +119,28 @@ Arguments:
   [ARGS]...  Additional arguments to pass to the editor [env: ARGS=]
 
 Options:
-  -b, --behavior <BEHAVIOR>          Launch behavior [possible values: detect, force-container, force-classic]
+      --hide-instructions            Hide the instruction message in the UI
   -s, --history-path <HISTORY_PATH>  Overwrite the default path to the history file [env: HISTORY_PATH=]
-  -c, --config <CONFIG>              Overwrites the path to the dev container config file [env: CONFIG=]
-  -d, --dry-run                      Whether to launch in dry-run mode [env: DRY_RUN=]
-      --command <COMMAND>            The editor command to use (e.g. "code", "code-insiders", "cursor") [env: COMMAND=]
+  -d, --dry-run                      Whether to launch in dry-run mode (not actually open vscode) [env: DRY_RUN=]
+      --hide-info                    Hide additional information like strategy, command, args and dev container path in the UI
+  -c, --command <COMMAND>            The editor command to use (e.g. "code", "code-insiders", "cursor") [env: COMMAND=]
   -v, --verbose...                   Increase logging verbosity
+  -b, --behavior <BEHAVIOR>          Launch behavior [possible values: detect, force-container, force-classic]
   -q, --quiet...                     Decrease logging verbosity
-  -h, --help                         Print help
+      --config <CONFIG>              Overwrites the path to the dev container config file [env: CONFIG=]
+  -h, --help                         Print help (see more with '--help')
 ```
 
-Both the `open` and `recent` commands share the same set of launch arguments, allowing you to customize how the editor is launched.
+Both the `open` and `recent` commands share the same set of launch arguments:
 
-The following keybindings are available:
+- `--command`: Specify which editor command to use (e.g., "code", "code-insiders", "cursor")
+- `--behavior`: Set the launch behavior ("detect", "force-container", "force-classic")
+- `--config`: Override the path to the dev container config file
+- Additional arguments can be passed to the editor executable by specifying them after `--`
+
+The `recent` command additionally supports:
+- `--hide-instructions`: Hide the keybinding instructions from the UI
+- `--hide-info`: Hide additional information like strategy, command, args and dev container path
 
 ##### Keybindings
 
@@ -217,11 +226,8 @@ vscli recent --behavior force-container         # force open the selected projec
 vscli recent --command cursor --behavior detect # open with cursor and detect if dev container should be used
 vscli recent --config .devcontainer/custom.json # open with a specific dev container config
 vscli recent -- --disable-gpu                   # pass additional arguments to the editor
+vscli recent --hide-instructions               # hide the keybinding instructions from the UI
+vscli recent --hide-info                       # hide additional information like strategy, command, args and dev container path
 ```
 
-Both the `open` and `recent` commands support the same set of launch arguments:
-
-- `--command`: Specify which editor command to use (e.g., "code", "code-insiders", "cursor")
-- `--behavior`: Set the launch behavior ("detect", "force-container", "force-classic")
-- `--config`: Override the path to the dev container config file
-- Additional arguments can be passed to the editor executable by specifying them after `--`
+The UI mode provides a convenient way to browse and manage your recent workspaces, with customizable display options and full support for all launch configurations.
