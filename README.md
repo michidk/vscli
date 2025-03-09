@@ -232,8 +232,8 @@ vscli recent --behavior force-container         # force open the selected projec
 vscli recent --command cursor --behavior detect # open with cursor and detect if dev container should be used
 vscli recent --config .devcontainer/custom.json # open with a specific dev container config
 vscli recent -- --disable-gpu                   # pass additional arguments to the editor
-vscli recent --hide-instructions               # hide the keybinding instructions from the UI
-vscli recent --hide-info                       # hide additional information like strategy, command, args and dev container path
+vscli recent --hide-instructions                # hide the keybinding instructions from the UI
+vscli recent --hide-info                        # hide additional information like strategy, command, args and dev container path
 ```
 
 The UI mode provides a convenient way to browse and manage your recent workspaces, with customizable display options and full support for all launch configurations.
