@@ -146,7 +146,7 @@ The `recent` command additionally supports:
 
 | Key/Key Combination             | Action                | Description                            |
 | ------------------------------- | --------------------- | -------------------------------------- |
-| `Esc`, `Ctrl+Q` or `Ctrl+C`   | Quit                  | Exits the application.
+| `Esc`, `Ctrl+Q` or `Ctrl+C`     | Quit                  | Exits the application.                 |
 | `Down` or `Ctrl+J`              | Select Next           | Moves to the next selectable item.     |
 | `Up` or `Ctrl+K`                | Select Previous       | Moves to the previous selectable item. |
 | `KeypadBegin` or `Ctrl+1`       | Select First          | Selects the first item.                |
@@ -156,6 +156,12 @@ The `recent` command additionally supports:
 
 Note: If an input does not match any of the defined keybindings, it is treated as part of a search input.
 
+##### Mouse Interactions
+
+| Mouse Action                   | Description                                                  |
+| ------------------------------ | ------------------------------------------------------------ |
+| Left Click                     | Selects an item. Clicking the same item again opens it.      |
+| Mouse Wheel                    | Scrolls through the list, moving selection up/down.          |
 
 ##### Launch Behavior
 

@@ -3,6 +3,7 @@ use color_eyre::eyre::Result;
 use crossterm::{
     event::{
         self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, KeyModifiers,
+        MouseButton, MouseEvent, MouseEventKind,
     },
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
@@ -19,7 +20,10 @@ use ratatui::{
     prelude::{Alignment, Rect},
     style::{Color, Style},
     text::Span,
-    widgets::{Block, Borders, Cell, Padding, Paragraph, Row, Table, TableState, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    widgets::{
+        Block, Borders, Cell, Padding, Paragraph, Row, Scrollbar, ScrollbarOrientation,
+        ScrollbarState, Table, TableState,
+    },
 };
 use std::{borrow::Cow, io};
 use tui_textarea::TextArea;
@@ -37,6 +41,7 @@ enum AppAction {
     OpenSelected,
     DeleteSelectedEntry,
     SearchInput(tui_textarea::Input),
+    TableClick(u16), // New variant for table clicks with row position
 }
 
 /// Represents a single record/entry of the UI table.
@@ -196,6 +201,7 @@ struct UI<'a> {
     table_data: TableData,
     hide_instructions: bool,
     hide_info: bool,
+    last_clicked_index: Option<usize>, // Track the last clicked row
 }
 
 impl<'a> UI<'a> {
@@ -209,6 +215,7 @@ impl<'a> UI<'a> {
             ),
             hide_instructions,
             hide_info,
+            last_clicked_index: None,
         }
     }
 
@@ -372,7 +379,6 @@ fn run_app<B: Backend>(
         terminal.draw(|f| render(f, &mut app))?;
 
         let input = event::read()?;
-
         let action = handle_input(input);
 
         if let Some(action) = action {
@@ -380,15 +386,19 @@ fn run_app<B: Backend>(
                 AppAction::Quit => return Ok(None),
                 AppAction::SelectNext => {
                     app.select_next();
+                    app.last_clicked_index = None; // Reset click tracking on navigation
                 }
                 AppAction::SelectPrevious => {
                     app.select_previous();
+                    app.last_clicked_index = None; // Reset click tracking on navigation
                 }
                 AppAction::SelectFirst => {
                     app.select_first();
+                    app.last_clicked_index = None; // Reset click tracking on navigation
                 }
                 AppAction::SelectLast => {
                     app.select_last();
+                    app.last_clicked_index = None; // Reset click tracking on navigation
                 }
                 AppAction::OpenSelected => {
                     if let Some(selected) = app.get_selected_row() {
@@ -398,12 +408,32 @@ fn run_app<B: Backend>(
                 AppAction::DeleteSelectedEntry => {
                     if let Some(selected) = app.get_selected_row() {
                         let entry_id = selected.id;
-                        // Allow for better readability
-                        #[allow(clippy::collapsible_if)]
-                        if tracker.history.delete(entry_id).is_some() {
-                            if !app.delete(entry_id) {
-                                // Desync - Deleted from history but not from UI.
-                                app.resync_table(&tracker.history);
+                        if tracker.history.delete(entry_id).is_some() && !app.delete(entry_id) {
+                            app.resync_table(&tracker.history);
+                        }
+                    }
+                    app.last_clicked_index = None; // Reset click tracking after deletion
+                }
+                AppAction::TableClick(row) => {
+                    // Check if click is within table area (accounting for borders and header)
+                    let table_area = terminal.get_frame().area();
+                    if row >= table_area.y + 2 && row < table_area.y + table_area.height - 1 {
+                        let clicked_index = (row - table_area.y - 2) as usize;
+                        let visible_rows = app.table_data.as_rows_full().count();
+
+                        if clicked_index < visible_rows {
+                            // If clicking the same row that was previously clicked and selected
+                            if app.last_clicked_index == Some(clicked_index)
+                                && app.table_state.selected() == Some(clicked_index)
+                            {
+                                // Launch the container
+                                if let Some(selected) = app.get_selected_row() {
+                                    return Ok(Some(selected.id));
+                                }
+                            } else {
+                                // Just select the row on first click
+                                app.table_state.select(Some(clicked_index));
+                                app.last_clicked_index = Some(clicked_index);
                             }
                         }
                     }
@@ -412,6 +442,7 @@ fn run_app<B: Backend>(
                     if app.search.input(input) {
                         let line = app.search.lines().first().cloned();
                         app.apply_filter(line.as_deref());
+                        app.last_clicked_index = None; // Reset click tracking on search
                     }
                 }
             }
@@ -420,30 +451,46 @@ fn run_app<B: Backend>(
 }
 
 fn handle_input(input: Event) -> Option<AppAction> {
-    if let Event::Key(key) = &input {
-        if key.kind != KeyEventKind::Press {
-            return None;
-        }
+    match input {
+        Event::Key(key) => {
+            if key.kind != KeyEventKind::Press {
+                return None;
+            }
 
-        let is_key = |code: KeyCode| key.code == code;
-        let is_char = |c: char| is_key(KeyCode::Char(c));
-        let is_ctrl_char = |c: char| key.modifiers.contains(KeyModifiers::CONTROL) && is_char(c);
+            let is_key = |code: KeyCode| key.code == code;
+            let is_char = |c: char| is_key(KeyCode::Char(c));
+            let is_ctrl_char =
+                |c: char| key.modifiers.contains(KeyModifiers::CONTROL) && is_char(c);
 
-        if is_key(KeyCode::Esc) || is_ctrl_char('q') || is_ctrl_char('c') {
-            return Some(AppAction::Quit);
-        } else if is_key(KeyCode::Down) || is_ctrl_char('j') {
-            return Some(AppAction::SelectNext);
-        } else if is_key(KeyCode::Up) || is_ctrl_char('k') {
-            return Some(AppAction::SelectPrevious);
-        } else if is_key(KeyCode::KeypadBegin) || is_ctrl_char('1') {
-            return Some(AppAction::SelectFirst);
-        } else if is_key(KeyCode::End) || is_ctrl_char('0') {
-            return Some(AppAction::SelectLast);
-        } else if is_key(KeyCode::Enter) || is_ctrl_char('o') {
-            return Some(AppAction::OpenSelected);
-        } else if is_key(KeyCode::Delete) || is_ctrl_char('r') || is_ctrl_char('x') {
-            return Some(AppAction::DeleteSelectedEntry);
+            if is_key(KeyCode::Esc) || is_ctrl_char('q') || is_ctrl_char('c') {
+                return Some(AppAction::Quit);
+            } else if is_key(KeyCode::Down) || is_ctrl_char('j') {
+                return Some(AppAction::SelectNext);
+            } else if is_key(KeyCode::Up) || is_ctrl_char('k') {
+                return Some(AppAction::SelectPrevious);
+            } else if is_key(KeyCode::KeypadBegin) || is_ctrl_char('1') {
+                return Some(AppAction::SelectFirst);
+            } else if is_key(KeyCode::End) || is_ctrl_char('0') {
+                return Some(AppAction::SelectLast);
+            } else if is_key(KeyCode::Enter) || is_ctrl_char('o') {
+                return Some(AppAction::OpenSelected);
+            } else if is_key(KeyCode::Delete) || is_ctrl_char('r') || is_ctrl_char('x') {
+                return Some(AppAction::DeleteSelectedEntry);
+            }
         }
+        Event::Mouse(MouseEvent { kind, row, .. }) => match kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                return Some(AppAction::TableClick(row));
+            }
+            MouseEventKind::ScrollDown => {
+                return Some(AppAction::SelectNext);
+            }
+            MouseEventKind::ScrollUp => {
+                return Some(AppAction::SelectPrevious);
+            }
+            _ => {}
+        },
+        _ => {}
     }
 
     Some(AppAction::SearchInput(input.into()))
@@ -571,7 +618,7 @@ fn render_table(
         x: area.x + area.width - 1, // Place on the right border
         y: area.y + 2,              // Start two lines below the top (one line after header)
         width: 1,
-        height: area.height - 3,    // Account for top border + header and bottom border
+        height: area.height - 3, // Account for top border + header and bottom border
     };
 
     // Render scrollbar
