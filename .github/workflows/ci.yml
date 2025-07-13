@@ -62,7 +62,7 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      # This pluging should be loaded after toolchain setup
+      # This plugin should be loaded after toolchain setup
       - name: Cache
         uses: Swatinem/rust-cache@v2
 

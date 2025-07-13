@@ -95,7 +95,7 @@ struct TableData {
     ///
     /// Note that this value does not change for a "session" even if a filter is applied and/or the
     /// longest entry is deleted.
-    max_worspace_name_len: Option<usize>,
+    max_workspace_name_len: Option<usize>,
 
     /// Caches the longest devcontainer name [`Self::rows`] contains.
     ///
@@ -112,7 +112,7 @@ impl TableData {
             rows: iter.into_iter().map(TableRow::from).collect(),
 
             max_devcontainer_name_len: None,
-            max_worspace_name_len: None,
+            max_workspace_name_len: None,
         };
 
         // Sort by `Last Opened` to keep same logic as previous versions
@@ -120,7 +120,7 @@ impl TableData {
         this.rows
             .sort_by_key(|entry| -entry.entry.last_opened.timestamp());
 
-        this.max_worspace_name_len = this
+        this.max_workspace_name_len = this
             .rows
             .iter()
             .map(|row| row.entry.workspace_name.len())
@@ -523,7 +523,7 @@ fn render(frame: &mut Frame, app: &mut UI) {
     // Calculate the longest workspace and dev container names
     let longest_ws_name = app
         .table_data
-        .max_worspace_name_len
+        .max_workspace_name_len
         .unwrap_or(20)
         .clamp(9, 60);
 
