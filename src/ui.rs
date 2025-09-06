@@ -379,7 +379,7 @@ fn run_app<B: Backend>(
         terminal.draw(|f| render(f, &mut app))?;
 
         let input = event::read()?;
-        let action = handle_input(input);
+        let action = handle_input(&input);
 
         if let Some(action) = action {
             match action {
@@ -450,7 +450,7 @@ fn run_app<B: Backend>(
     }
 }
 
-fn handle_input(input: Event) -> Option<AppAction> {
+fn handle_input(input: &Event) -> Option<AppAction> {
     match input {
         Event::Key(key) => {
             if key.kind != KeyEventKind::Press {
@@ -477,10 +477,13 @@ fn handle_input(input: Event) -> Option<AppAction> {
             } else if is_key(KeyCode::Delete) || is_ctrl_char('r') || is_ctrl_char('x') {
                 return Some(AppAction::DeleteSelectedEntry);
             }
+
+            // For other key events (typing), pass to search input
+            return Some(AppAction::SearchInput((*key).into()));
         }
         Event::Mouse(MouseEvent { kind, row, .. }) => match kind {
             MouseEventKind::Down(MouseButton::Left) => {
-                return Some(AppAction::TableClick(row));
+                return Some(AppAction::TableClick(*row));
             }
             MouseEventKind::ScrollDown => {
                 return Some(AppAction::SelectNext);
@@ -493,7 +496,7 @@ fn handle_input(input: Event) -> Option<AppAction> {
         _ => {}
     }
 
-    Some(AppAction::SearchInput(input.into()))
+    None
 }
 
 /// Main render function
