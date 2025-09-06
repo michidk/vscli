@@ -113,7 +113,8 @@ impl Setup {
         let name = self.workspace.name.clone();
 
         if let Some(config) = config {
-            trace!("Dev container set by path: {config:?}");
+            let config_log = config.display();
+            trace!("Dev container set by path: {config_log}");
             Ok(Some(DevContainer::from_config(config.as_path(), &name)?))
         } else {
             let configs = self.workspace.find_dev_container_configs();
@@ -149,7 +150,7 @@ impl Setup {
                 let dev_container = self.detect(config)?;
 
                 if let Some(ref dev_container) = dev_container {
-                    info!("Opening dev container with {}...", editor_name);
+                    info!("Opening dev container with {editor_name}...");
                     self.workspace.open(
                         self.behavior.args,
                         self.dry_run,
@@ -157,10 +158,7 @@ impl Setup {
                         &self.behavior.command,
                     )?;
                 } else {
-                    info!(
-                        "No dev container found, opening on host system with {}...",
-                        editor_name
-                    );
+                    info!("No dev container found, opening on host system with {editor_name}...");
                     self.workspace.open_classic(
                         self.behavior.args,
                         self.dry_run,
@@ -173,7 +171,7 @@ impl Setup {
                 let dev_container = self.detect(config)?;
 
                 if let Some(ref dev_container) = dev_container {
-                    info!("Force opening dev container with {}...", editor_name);
+                    info!("Force opening dev container with {editor_name}...");
                     self.workspace.open(
                         self.behavior.args,
                         self.dry_run,
@@ -188,7 +186,7 @@ impl Setup {
                 Ok(dev_container)
             }
             ContainerStrategy::ForceClassic => {
-                info!("Opening without dev containers using {}...", editor_name);
+                info!("Opening without dev containers using {editor_name}...");
                 self.workspace.open_classic(
                     self.behavior.args,
                     self.dry_run,

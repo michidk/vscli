@@ -40,7 +40,7 @@ fn main() -> Result<()> {
         .format(move |buf, record| log_format(buf, record, opts.verbose.log_level_filter()))
         .init();
 
-    trace!("Parsed Opts:\n{}", opts_dbg);
+    trace!("Parsed Opts:\n{opts_dbg}");
 
     // Setup the tracker
     let mut tracker = {

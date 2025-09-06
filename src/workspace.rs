@@ -31,10 +31,10 @@ impl DevContainer {
     /// Creates a new `DevContainer` from a dev container config file and fallback workspace name.
     pub fn from_config(path: &Path, workspace_name: &str) -> Result<DevContainer> {
         let dev_container = Self::parse_dev_container_config(path)?;
-        trace!("dev container config: {:?}", dev_container);
+        trace!("dev container config: {dev_container:?}");
 
         let folder: String = if let Some(folder) = dev_container["workspaceFolder"].as_str() {
-            debug!("Read workspace folder from config: {}", folder);
+            debug!("Read workspace folder from config: {folder}");
             folder.to_owned()
         } else {
             debug!("Could not read workspace folder from config -> using default folder");
@@ -43,7 +43,7 @@ impl DevContainer {
         trace!("Workspace folder: {folder}");
 
         let name = if let Some(name) = dev_container["name"].as_str() {
-            debug!("Read workspace name from config: {}", name);
+            debug!("Read workspace name from config: {name}");
             Some(name.to_owned())
         } else {
             debug!("Could not read workspace name from config");
@@ -61,13 +61,15 @@ impl DevContainer {
     /// Parses the dev container config file.
     /// `https://code.visualstudio.com/remote/advancedcontainers/change-default-source-mount`
     fn parse_dev_container_config(path: &Path) -> Result<serde_json::Value> {
+        let path_log = path.display();
+
         let content = std::fs::read_to_string(path)
-            .wrap_err_with(|| format!("Failed to read dev container config file: {path:?}"))?;
+            .wrap_err_with(|| format!("Failed to read dev container config file: {path_log}"))?;
 
         let config: serde_json::Value = json5::from_str(&content)
-            .wrap_err_with(|| format!("Failed to parse json file: {path:?}"))?;
+            .wrap_err_with(|| format!("Failed to parse json file: {path_log}"))?;
 
-        debug!("Parsed dev container config: {:?}", path);
+        debug!("Parsed dev container config: {path_log}");
         Ok(config)
     }
 }
@@ -90,9 +92,10 @@ impl Workspace {
         }
 
         // canonicalize path
+        let path_log = path.display();
         let path = std::fs::canonicalize(path)
-            .wrap_err_with(|| format!("Error canonicalizing path: {path:?}"))?;
-        trace!("Canonicalized path: {}", path.display());
+            .wrap_err_with(|| format!("Error canonicalizing path: {path_log}"))?;
+        trace!("Canonicalized path: {path_log}");
 
         // get workspace name (either directory or file name)
         let workspace_name = path
@@ -257,7 +260,7 @@ impl Workspace {
         command: &str,
     ) -> Result<()> {
         trace!("path: {}", self.path.display());
-        trace!("args: {:?}", args);
+        trace!("args: {args:?}");
 
         args.insert(0, self.path.as_os_str().to_owned());
         exec_code(args, dry_run, command)
@@ -295,12 +298,12 @@ fn exec_code(mut args: Vec<OsString>, dry_run: bool, command: &str) -> Result<()
 
 /// Executes a command with given arguments and debug outputs, with an option for dry run
 fn run(cmd: &str, args: Vec<OsString>, dry_run: bool) -> Result<()> {
-    debug!("executable: {}", cmd);
-    debug!("final args: {:?}", args);
+    debug!("executable: {cmd}");
+    debug!("final args: {args:?}");
 
     if !dry_run {
         let output = Command::new(cmd).args(args).output()?;
-        debug!("Command output: {:?}", output);
+        debug!("Command output: {output:?}");
     }
 
     Ok(())
