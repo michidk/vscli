@@ -86,7 +86,7 @@ impl DevContainer {
 
         // Replace ${localWorkspaceFolder} with the full workspace path
         // This defaults to /workspaces/<workspace_name> for consistency
-        let default_workspace = format!("/workspaces/{}", workspace_name);
+        let default_workspace = format!("/workspaces/{workspace_name}");
         result = result.replace("${localWorkspaceFolder}", &default_workspace);
 
         result
