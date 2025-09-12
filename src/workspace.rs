@@ -35,7 +35,8 @@ impl DevContainer {
 
         let folder: String = if let Some(folder) = dev_container["workspaceFolder"].as_str() {
             debug!("Read workspace folder from config: {folder}");
-            folder.to_owned()
+            // Substitute variables in the workspace folder path
+            Self::substitute_variables(folder, workspace_name)
         } else {
             debug!("Could not read workspace folder from config -> using default folder");
             format!("/workspaces/{workspace_name}")
@@ -71,6 +72,24 @@ impl DevContainer {
 
         debug!("Parsed dev container config: {path_log}");
         Ok(config)
+    }
+
+    /// Substitutes variables in the workspace folder path.
+    /// Supports the following variables:
+    /// - ${localWorkspaceFolderBasename} - The name of the workspace folder
+    /// - ${localWorkspaceFolder} - The full path to the workspace folder (defaults to /workspaces/<name>)
+    fn substitute_variables(folder: &str, workspace_name: &str) -> String {
+        let mut result = folder.to_owned();
+
+        // Replace ${localWorkspaceFolderBasename} with the workspace name
+        result = result.replace("${localWorkspaceFolderBasename}", workspace_name);
+
+        // Replace ${localWorkspaceFolder} with the full workspace path
+        // This defaults to /workspaces/<workspace_name> for consistency
+        let default_workspace = format!("/workspaces/{workspace_name}");
+        result = result.replace("${localWorkspaceFolder}", &default_workspace);
+
+        result
     }
 }
 
@@ -326,5 +345,28 @@ mod tests {
             dev_container.workspace_path_in_container,
             "/workspaces/test"
         );
+    }
+
+    #[test]
+    fn test_substitute_variables() {
+        // Test ${localWorkspaceFolderBasename} substitution
+        let folder = "/workspaces/${localWorkspaceFolderBasename}";
+        let result = DevContainer::substitute_variables(folder, "my-project");
+        assert_eq!(result, "/workspaces/my-project");
+
+        // Test ${localWorkspaceFolder} substitution
+        let folder = "${localWorkspaceFolder}/src";
+        let result = DevContainer::substitute_variables(folder, "my-project");
+        assert_eq!(result, "/workspaces/my-project/src");
+
+        // Test combination of variables
+        let folder = "${localWorkspaceFolder}/${localWorkspaceFolderBasename}-test";
+        let result = DevContainer::substitute_variables(folder, "my-project");
+        assert_eq!(result, "/workspaces/my-project/my-project-test");
+
+        // Test no variables
+        let folder = "/custom/path";
+        let result = DevContainer::substitute_variables(folder, "my-project");
+        assert_eq!(result, "/custom/path");
     }
 }
