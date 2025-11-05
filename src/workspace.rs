@@ -192,6 +192,7 @@ impl Workspace {
         dry_run: bool,
         dev_container: &DevContainer,
         command: &str,
+        subfolder: Option<&Path>,
     ) -> Result<()> {
         // Checking if '--folder-uri' is present in the arguments
         if args.iter().any(|arg| arg == "--folder-uri") {
@@ -199,7 +200,19 @@ impl Workspace {
         }
 
         // get the folder path from the selected dev container
-        let container_folder: String = dev_container.workspace_path_in_container.clone();
+        let mut container_folder: String = dev_container.workspace_path_in_container.clone();
+
+        // Append subfolder if specified
+        if let Some(subfolder) = subfolder {
+            let subfolder_str = subfolder.to_string_lossy();
+            if !subfolder_str.is_empty() && subfolder_str != "." {
+                // Ensure proper path separator
+                if !container_folder.ends_with('/') {
+                    container_folder.push('/');
+                }
+                container_folder.push_str(&subfolder_str);
+            }
+        }
 
         let mut ws_path: String = self.path.to_string_lossy().into_owned();
         let mut dc_path: String = dev_container.config_path.to_string_lossy().into_owned();

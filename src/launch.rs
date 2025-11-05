@@ -142,7 +142,11 @@ impl Setup {
 
     /// Launches vscode with the given configuration.
     /// Returns the dev container that was used, if any.
-    pub fn launch(self, config: Option<PathBuf>) -> Result<Option<DevContainer>> {
+    pub fn launch(
+        self,
+        config: Option<PathBuf>,
+        subfolder: Option<PathBuf>,
+    ) -> Result<Option<DevContainer>> {
         let editor_name = format_editor_name(&self.behavior.command);
 
         match self.behavior.strategy {
@@ -156,6 +160,7 @@ impl Setup {
                         self.dry_run,
                         dev_container,
                         &self.behavior.command,
+                        subfolder.as_deref(),
                     )?;
                 } else {
                     info!("No dev container found, opening on host system with {editor_name}...");
@@ -177,6 +182,7 @@ impl Setup {
                         self.dry_run,
                         dev_container,
                         &self.behavior.command,
+                        subfolder.as_deref(),
                     )?;
                 } else {
                     bail!(
