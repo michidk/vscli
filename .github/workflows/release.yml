@@ -78,7 +78,7 @@ jobs:
           target: x86_64-pc-windows-msvc
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
