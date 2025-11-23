@@ -58,8 +58,56 @@ fn main() -> Result<()> {
     match opts.command {
         opts::Commands::Open { path, launch } => {
             // Get workspace from args
-            let path = path.as_path();
-            let ws = Workspace::from_path(path)?;
+            // If a custom config is specified, derive workspace from config location
+            let (workspace_path, subfolder) = if let Some(ref config) = launch.config {
+                // Get the parent directory of the config file
+                let config_parent = config
+                    .parent()
+                    .ok_or_else(|| color_eyre::eyre::eyre!("Invalid config path"))?;
+
+                // If config is in .devcontainer folder, use its parent as workspace
+                let workspace_root = if config_parent
+                    .file_name()
+                    .map(|n| n == ".devcontainer")
+                    .unwrap_or(false)
+                {
+                    config_parent
+                        .parent()
+                        .ok_or_else(|| {
+                            color_eyre::eyre::eyre!("Invalid config path structure")
+                        })?
+                } else {
+                    config_parent
+                };
+
+                // Handle the path argument - it might be a container path or relative path
+                let path_str = path.to_string_lossy();
+                let subfolder_path = if path_str.starts_with("/workspace/") || path_str.starts_with("/workspaces/") {
+                    // Extract subfolder from container path
+                    // e.g., "/workspace/vscli/tests" or "/workspaces/vscli/tests"
+                    let parts: Vec<&str> = path_str.split('/').collect();
+                    if parts.len() > 3 {
+                        // Skip empty, "workspace(s)", and workspace name
+                        Some(std::path::PathBuf::from(parts[3..].join("/")))
+                    } else {
+                        None
+                    }
+                } else if path.is_relative() && path != std::path::Path::new(".") {
+                    // Use relative path as-is
+                    Some(path.to_path_buf())
+                } else if path.starts_with(workspace_root) {
+                    // Calculate relative path from workspace root
+                    path.strip_prefix(workspace_root).ok().map(|p| p.to_path_buf())
+                } else {
+                    None
+                };
+
+                (workspace_root.to_path_buf(), subfolder_path)
+            } else {
+                (path.to_path_buf(), None)
+            };
+
+            let ws = Workspace::from_path(&workspace_path)?;
             let ws_name = ws.name.clone();
 
             // Open the container
@@ -69,7 +117,7 @@ fn main() -> Result<()> {
                 command: launch.command.unwrap_or_else(|| "code".to_string()),
             };
             let setup = Setup::new(ws, behavior.clone(), opts.dry_run);
-            let dev_container = setup.launch(launch.config)?;
+            let dev_container = setup.launch(launch.config, subfolder)?;
 
             // Store the workspace in the history
             tracker.history.upsert(Entry {
@@ -114,7 +162,7 @@ fn main() -> Result<()> {
 
                 // Open the container
                 let setup = Setup::new(ws, entry.behavior.clone(), opts.dry_run);
-                let dev_container = setup.launch(entry.config_path)?;
+                let dev_container = setup.launch(entry.config_path, None)?;
 
                 // Update the tracker entry
                 tracker.history.update(
