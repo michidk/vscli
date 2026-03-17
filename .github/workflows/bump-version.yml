@@ -1,0 +1,63 @@
+name: Bump Version & Tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 1.2.3, without 'v' prefix)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  bump-and-tag:
+    name: Bump version and create tag
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Validate version format
+        run: |
+          if [[ ! "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid version format '${{ inputs.version }}'. Expected semver (e.g. 1.2.3)."
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Bump version in Cargo.toml
+        run: |
+          sed -i 's/^version = ".*"/version = "${{ inputs.version }}"/' Cargo.toml
+
+      - name: Update Cargo.lock
+        run: cargo generate-lockfile
+
+      - name: Verify version was set
+        run: |
+          actual=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          if [[ "$actual" != "${{ inputs.version }}" ]]; then
+            echo "::error::Version mismatch: expected '${{ inputs.version }}', got '$actual'"
+            exit 1
+          fi
+          echo "Version set to $actual"
+
+      - name: Commit and tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.toml Cargo.lock
+          git commit -m "release: v${{ inputs.version }}"
+          git tag "v${{ inputs.version }}"
+
+      - name: Push commit and tag
+        run: git push origin HEAD "v${{ inputs.version }}"

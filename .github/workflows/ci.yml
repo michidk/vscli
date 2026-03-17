@@ -29,8 +29,11 @@ defaults:
 
 jobs:
   test:
-    name: Test Suite
-    runs-on: ubuntu-24.04
+    name: Test Suite (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
     steps:
       - name: Checkout sources
         uses: actions/checkout@v6
@@ -38,12 +41,9 @@ jobs:
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      # This plugin should be loaded after toolchain setup
       - name: Cache
         uses: Swatinem/rust-cache@v2
 
-      # `test` is used instead of `build` to also include the test modules in
-      # the compilation check.
       - name: Compile
         run: cargo test --no-run
 
@@ -62,7 +62,6 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      # This plugin should be loaded after toolchain setup
       - name: Cache
         uses: Swatinem/rust-cache@v2
 
