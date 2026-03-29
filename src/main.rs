@@ -69,12 +69,72 @@ fn workspace_root_from_config(
         current = parent;
     };
     let path_abs = std::fs::canonicalize(path_arg).unwrap_or(path_arg.to_path_buf());
-    let sub = if path_abs.starts_with(&root) && path_abs != root {
-        path_abs.strip_prefix(&root).ok().map(Path::to_path_buf)
+    if path_abs.starts_with(&root) {
+        let sub = if path_abs == root {
+            None
+        } else {
+            path_abs.strip_prefix(&root).ok().map(Path::to_path_buf)
+        };
+        Ok((root, sub))
     } else {
-        None
-    };
-    Ok((root, sub))
+        Ok((path_abs, None))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::workspace_root_from_config;
+    use std::ffi::OsString;
+    use std::path::Path;
+
+    fn unique_test_dir(name: &str) -> std::path::PathBuf {
+        let unique = format!(
+            "vscli-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        std::env::temp_dir().join(OsString::from(unique))
+    }
+
+    #[test]
+    fn preserves_project_path_for_external_config() {
+        let root = unique_test_dir("external-config");
+        let config = root
+            .join("configs")
+            .join("rust-dev")
+            .join(".devcontainer")
+            .join("devcontainer.json");
+        let project = root.join("projects").join("my-app");
+
+        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::write(&config, "{}\n").unwrap();
+
+        let (workspace, subfolder) = workspace_root_from_config(&config, &project).unwrap();
+
+        assert_eq!(workspace, project.canonicalize().unwrap());
+        assert_eq!(subfolder, None);
+    }
+
+    #[test]
+    fn derives_subfolder_when_path_is_inside_config_workspace() {
+        let root = unique_test_dir("subfolder");
+        let workspace = root.join("workspace");
+        let config = workspace.join(".devcontainer").join("devcontainer.json");
+        let project = workspace.join("packages").join("api");
+
+        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::write(&config, "{}\n").unwrap();
+
+        let (resolved_workspace, subfolder) = workspace_root_from_config(&config, &project).unwrap();
+
+        assert_eq!(resolved_workspace, workspace.canonicalize().unwrap());
+        assert_eq!(subfolder.as_deref(), Some(Path::new("packages/api")));
+    }
 }
 
 fn main() -> Result<()> {
