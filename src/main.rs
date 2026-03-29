@@ -100,6 +100,16 @@ fn resolve_strategy_for_remote(
     }
 }
 
+fn ensure_remote_has_no_config(remote_host: Option<&str>, config: Option<&Path>) -> Result<()> {
+    if remote_host.is_some() && config.is_some() {
+        bail!(
+            "--config cannot be combined with --remote-host; point vscli at the remote workspace path instead."
+        );
+    }
+
+    Ok(())
+}
+
 fn open_workspace(
     path: &Path,
     launch: LaunchArgs,
@@ -107,13 +117,8 @@ fn open_workspace(
     config_store: &ConfigStore,
     dry_run: bool,
 ) -> Result<()> {
-    if launch.remote_host.is_some() && launch.config.is_some() {
-        bail!(
-            "--config cannot be combined with --remote-host; point vscli at the remote workspace path instead."
-        );
-    }
-
     let resolved_config = resolve_launch_config(launch.config.as_ref(), config_store)?;
+    ensure_remote_has_no_config(launch.remote_host.as_deref(), resolved_config.as_deref())?;
     let config_name = resolved_config
         .as_ref()
         .and_then(|p| config_store::config_name_from_path(p, config_store));
@@ -165,12 +170,6 @@ fn reopen_recent(
 ) -> Result<()> {
     let res = ui::start(tracker, hide_instructions, hide_info)?;
     if let Some((id, mut entry)) = res {
-        if launch.remote_host.is_some() && launch.config.is_some() {
-            bail!(
-                "--config cannot be combined with --remote-host; point vscli at the remote workspace path instead."
-            );
-        }
-
         let remote_host = launch.remote_host.clone().or(entry.remote_host.clone());
         let ws = if let Some(remote_host) = remote_host.clone() {
             Workspace::from_remote_path(&entry.workspace_path, remote_host)?
@@ -198,6 +197,7 @@ fn reopen_recent(
         } else {
             entry.config_path.clone()
         };
+        ensure_remote_has_no_config(remote_host.as_deref(), resolved_config.as_deref())?;
 
         let config_name = resolved_config
             .as_ref()

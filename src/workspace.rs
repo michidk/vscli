@@ -299,6 +299,10 @@ impl Workspace {
         trace!("path: {}", self.path.display());
         trace!("args: {args:?}");
 
+        if args.iter().any(|arg| arg == "--folder-uri") {
+            bail!("Specifying `--folder-uri` is not possible while using vscli.");
+        }
+
         if self.remote_host.is_some() {
             let uri = self.remote_folder_uri(None);
             args.push(OsString::from("--folder-uri"));

@@ -7,6 +7,8 @@ TMP_DIR="$(mktemp -d)"
 KEY_PATH="$TMP_DIR/id_ed25519"
 SSH_CONFIG="$TMP_DIR/ssh_config"
 DOCKER_CONFIG_DIR="$TMP_DIR/docker-config"
+FAKE_EDITOR="$TMP_DIR/fake-editor.sh"
+EDITOR_LOG="$TMP_DIR/editor-args.log"
 
 cleanup() {
   AUTHORIZED_KEY="${AUTHORIZED_KEY:-}" docker compose -f "$TEST_DIR/docker-compose.yml" down -v >/dev/null 2>&1 || true
@@ -31,6 +33,13 @@ Host vscli-remote-test
     UserKnownHostsFile /dev/null
 EOF
 
+cat > "$FAKE_EDITOR" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$@" > "$VSCLI_EDITOR_LOG"
+EOF
+chmod +x "$FAKE_EDITOR"
+
 docker compose -f "$TEST_DIR/docker-compose.yml" up -d --build
 
 for _ in $(seq 1 30); do
@@ -41,4 +50,7 @@ for _ in $(seq 1 30); do
 done
 
 ssh -F "$SSH_CONFIG" vscli-remote-test 'test -f /home/dev/workspace/.devcontainer/devcontainer.json'
-SSH_CONFIG_FILE="$SSH_CONFIG" cargo run -- --dry-run open --remote-host vscli-remote-test /home/dev/workspace --command bash
+VSCLI_EDITOR_LOG="$EDITOR_LOG" cargo run -- open --remote-host vscli-remote-test /home/dev/workspace --command "$FAKE_EDITOR"
+
+grep -Fx -- '--folder-uri' "$EDITOR_LOG"
+grep -Fx -- 'vscode-remote://ssh-remote+vscli-remote-test/home/dev/workspace' "$EDITOR_LOG"

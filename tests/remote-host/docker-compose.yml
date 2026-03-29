@@ -6,4 +6,4 @@ services:
     environment:
       AUTHORIZED_KEY: ${AUTHORIZED_KEY:?set AUTHORIZED_KEY to an SSH public key}
     ports:
-      - "2222:22"
+      - "127.0.0.1:2222:22"
