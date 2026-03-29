@@ -315,6 +315,24 @@ fn run(cmd: &str, args: Vec<OsString>, dry_run: bool) -> Result<()> {
     Ok(())
 }
 
+/// Converts a Docker label path (which may be a Windows/WSL path) to a local filesystem path.
+#[cfg(unix)]
+pub fn resolve_local_path(path: &str) -> String {
+    if (path.starts_with("\\\\wsl") || path.starts_with("//wsl"))
+        && let Ok(converted) =
+            wslpath2::convert(path, None, wslpath2::Conversion::WindowsToWsl, true)
+    {
+        return converted;
+    }
+    path.to_string()
+}
+
+/// Converts a Docker label path (which may be a Windows/WSL path) to a local filesystem path.
+#[cfg(windows)]
+pub fn resolve_local_path(path: &str) -> String {
+    path.to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -356,22 +374,4 @@ mod tests {
         let result = DevContainer::substitute_variables(folder, "my-project");
         assert_eq!(result, "/custom/path");
     }
-}
-
-/// Converts a Docker label path (which may be a Windows/WSL path) to a local filesystem path.
-#[cfg(unix)]
-pub fn resolve_local_path(path: &str) -> String {
-    if (path.starts_with("\\\\wsl") || path.starts_with("//wsl"))
-        && let Ok(converted) =
-            wslpath2::convert(path, None, wslpath2::Conversion::WindowsToWsl, true)
-    {
-        return converted;
-    }
-    path.to_string()
-}
-
-/// Converts a Docker label path (which may be a Windows/WSL path) to a local filesystem path.
-#[cfg(windows)]
-pub fn resolve_local_path(path: &str) -> String {
-    path.to_string()
 }
