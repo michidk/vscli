@@ -233,7 +233,7 @@ pub fn run_command(action: ContainerAction, editor: &str) -> Result<()> {
                     let config_path = PathBuf::from(&config_file);
                     if config_path.exists() {
                         let dev_container = DevContainer::from_config(&config_path, &ws.name)?;
-                        ws.open(vec![], false, &dev_container, editor)?;
+                        ws.open(vec![], false, &dev_container, editor, None)?;
                     } else {
                         ws.open_classic(vec![], false, editor)?;
                     }

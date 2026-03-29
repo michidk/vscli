@@ -18,10 +18,10 @@ mod workspace;
 
 use chrono::Utc;
 use clap::Parser;
-use color_eyre::eyre::Result;
+use color_eyre::eyre::{Result, WrapErr};
 use log::trace;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::config_store::ConfigStore;
 use crate::history::{Entry, Tracker};
@@ -52,6 +52,31 @@ fn resolve_launch_config(config: Option<&PathBuf>, store: &ConfigStore) -> Resul
         .transpose()
 }
 
+fn workspace_root_from_config(
+    config: &Path,
+    path_arg: &Path,
+) -> Result<(PathBuf, Option<PathBuf>)> {
+    let abs = std::fs::canonicalize(config)
+        .wrap_err_with(|| format!("Config path does not exist: {}", config.display()))?;
+    let mut current = abs.as_path();
+    let root = loop {
+        let Some(parent) = current.parent() else {
+            break abs.parent().unwrap_or(&abs).to_path_buf();
+        };
+        if parent.file_name().is_some_and(|n| n == ".devcontainer") {
+            break parent.parent().unwrap_or(parent).to_path_buf();
+        }
+        current = parent;
+    };
+    let path_abs = std::fs::canonicalize(path_arg).unwrap_or(path_arg.to_path_buf());
+    let sub = if path_abs.starts_with(&root) && path_abs != root {
+        path_abs.strip_prefix(&root).ok().map(Path::to_path_buf)
+    } else {
+        None
+    };
+    Ok((root, sub))
+}
+
 fn main() -> Result<()> {
     color_eyre::install()?;
 
@@ -70,14 +95,20 @@ fn main() -> Result<()> {
     match opts.command {
         opts::Commands::Open { path, launch } => {
             let mut tracker = load_tracker(opts.history_path)?;
-            let path = path.as_path();
-            let ws = Workspace::from_path(path)?;
-            let ws_name = ws.name.clone();
 
             let resolved_config = resolve_launch_config(launch.config.as_ref(), &config_store)?;
             let config_name = resolved_config
                 .as_ref()
                 .and_then(|p| config_store::config_name_from_path(p, &config_store));
+
+            let (workspace_path, subfolder) = if let Some(ref config) = resolved_config {
+                workspace_root_from_config(config, &path)?
+            } else {
+                (path.clone(), None)
+            };
+
+            let ws = Workspace::from_path(&workspace_path)?;
+            let ws_name = ws.name.clone();
 
             let behavior = Behavior {
                 strategy: launch.behavior.unwrap_or_default(),
@@ -85,13 +116,13 @@ fn main() -> Result<()> {
                 command: launch.command.unwrap_or_else(|| "code".to_string()),
             };
             let setup = Setup::new(ws, behavior.clone(), opts.dry_run);
-            let dev_container = setup.launch(resolved_config)?;
+            let dev_container = setup.launch(resolved_config, subfolder.as_deref())?;
 
             tracker.history.upsert(Entry {
                 workspace_name: ws_name,
                 dev_container_name: dev_container.as_ref().and_then(|dc| dc.name.clone()),
                 config_name,
-                workspace_path: path.canonicalize()?,
+                workspace_path: workspace_path.canonicalize()?,
                 config_path: dev_container.map(|dc| dc.config_path),
                 behavior,
                 last_opened: Utc::now(),
@@ -130,7 +161,7 @@ fn main() -> Result<()> {
                     .and_then(|p| config_store::config_name_from_path(p, &config_store));
 
                 let setup = Setup::new(ws, entry.behavior.clone(), opts.dry_run);
-                let dev_container = setup.launch(resolved_config)?;
+                let dev_container = setup.launch(resolved_config, None)?;
 
                 tracker.history.update(
                     id,
