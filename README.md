@@ -244,6 +244,8 @@ vscli open /path/to/project         # open vscode in the specified directory
 
 The default behavior tries to detect whether the project is a [dev container](https://containers.dev/) project. If it is, it will launch the dev container instead - if not it will launch vscode normally.
 
+These behaviors apply to local workspaces. Remote SSH workspaces always open as remote folders; `--behavior detect` and `--behavior force-container` are not supported with `--remote-host`.
+
 You can change the launch behavior using the `--behavior` flag:
 
 ```sh
@@ -281,6 +283,7 @@ vscli recent --command cursor                   # open the selected project with
 vscli recent --behavior force-container         # force open the selected project in a dev container
 vscli recent --command cursor --behavior detect # open with cursor and detect if dev container should be used
 vscli recent --config .devcontainer/custom.json # open with a specific dev container config
+vscli recent --remote-host my-ec2               # reopen the selected project on a remembered remote host
 vscli recent -- --disable-gpu                   # pass additional arguments to the editor
 vscli recent --hide-instructions                # hide the keybinding instructions from the UI
 vscli recent --hide-info                        # hide additional information like strategy, command, args and dev container path
@@ -305,11 +308,12 @@ If you already use VS Code Remote SSH, you can point `vscli` at a remote host al
 
 ```sh
 vscli open --remote-host my-ec2 /home/ec2-user/app
-vscli open --remote-host my-ec2 --behavior force-container /home/ec2-user/app
 vscli recent --remote-host my-ec2
 ```
 
-This opens the workspace using a `vscode-remote://ssh-remote+...` folder URI. If the remote folder contains a `.devcontainer` setup, VS Code Dev Containers can reopen it in a container on that remote host.
+This opens the workspace using a `vscode-remote://ssh-remote+...` folder URI and stores the remote host in `recent` history so you can reopen it from the UI later.
+
+`vscli` does not manage dev containers on remote SSH hosts. Remote workspaces are opened as SSH folders; if the remote folder contains a `.devcontainer` setup, VS Code Dev Containers may offer to reopen it in a container afterward.
 
 #### Environment Variables
 

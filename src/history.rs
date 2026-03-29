@@ -229,3 +229,59 @@ impl Tracker {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{Entry, History, Tracker};
+    use crate::launch::{Behavior, ContainerStrategy};
+    use chrono::Utc;
+    use std::ffi::OsString;
+    use std::path::PathBuf;
+
+    fn unique_test_path(name: &str) -> PathBuf {
+        let unique = format!(
+            "vscli-history-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        std::env::temp_dir().join(unique).join("history.json")
+    }
+
+    #[test]
+    fn tracker_store_and_load_preserve_remote_host_entries() {
+        let path = unique_test_path("remote-host");
+        let mut tracker = Tracker {
+            path: path.clone(),
+            history: History::default(),
+        };
+
+        tracker.history.upsert(Entry {
+            workspace_name: "workspace".to_string(),
+            dev_container_name: None,
+            config_name: None,
+            workspace_path: PathBuf::from("/home/dev/workspace"),
+            remote_host: Some("vscli-remote-test".to_string()),
+            config_path: None,
+            behavior: Behavior {
+                strategy: ContainerStrategy::ForceClassic,
+                args: vec![OsString::from("--reuse-window")],
+                command: "code".to_string(),
+            },
+            last_opened: Utc::now(),
+        });
+
+        tracker.store().unwrap();
+
+        let loaded = Tracker::load(path).unwrap();
+        let entries = loaded.history.into_entries();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].remote_host.as_deref(), Some("vscli-remote-test"));
+        assert_eq!(
+            entries[0].behavior.strategy,
+            ContainerStrategy::ForceClassic
+        );
+    }
+}

@@ -27,7 +27,7 @@ use crate::config_store::ConfigStore;
 use crate::history::{Entry, Tracker};
 
 use crate::{
-    launch::{Behavior, Setup},
+    launch::{Behavior, ContainerStrategy, Setup},
     opts::{LaunchArgs, Opts},
     workspace::Workspace,
 };
@@ -69,12 +69,35 @@ fn workspace_root_from_config(
         current = parent;
     };
     let path_abs = std::fs::canonicalize(path_arg).unwrap_or(path_arg.to_path_buf());
-    let sub = if path_abs.starts_with(&root) && path_abs != root {
-        path_abs.strip_prefix(&root).ok().map(Path::to_path_buf)
+    if path_abs.starts_with(&root) {
+        let sub = if path_abs == root {
+            None
+        } else {
+            path_abs.strip_prefix(&root).ok().map(Path::to_path_buf)
+        };
+        Ok((root, sub))
     } else {
-        None
-    };
-    Ok((root, sub))
+        Ok((path_abs, None))
+    }
+}
+
+fn resolve_strategy_for_remote(
+    remote_host: Option<&str>,
+    strategy: Option<ContainerStrategy>,
+) -> Result<ContainerStrategy> {
+    if remote_host.is_some() {
+        match strategy {
+            None | Some(ContainerStrategy::ForceClassic) => Ok(ContainerStrategy::ForceClassic),
+            Some(ContainerStrategy::Detect) => {
+                bail!("--behavior detect is not supported with --remote-host.")
+            }
+            Some(ContainerStrategy::ForceContainer) => {
+                bail!("--behavior force-container is not supported with --remote-host.")
+            }
+        }
+    } else {
+        Ok(strategy.unwrap_or_default())
+    }
 }
 
 fn open_workspace(
@@ -111,7 +134,7 @@ fn open_workspace(
     let remote_host = ws.remote_host.clone();
 
     let behavior = Behavior {
-        strategy: launch.behavior.unwrap_or_default(),
+        strategy: resolve_strategy_for_remote(ws.remote_host.as_deref(), launch.behavior)?,
         args: launch.args,
         command: launch.command.unwrap_or_else(|| "code".to_string()),
     };
@@ -166,6 +189,9 @@ fn reopen_recent(
         if !launch.args.is_empty() {
             entry.behavior.args = launch.args;
         }
+
+        entry.behavior.strategy =
+            resolve_strategy_for_remote(remote_host.as_deref(), Some(entry.behavior.strategy))?;
 
         let resolved_config = if launch.config.is_some() {
             resolve_launch_config(launch.config.as_ref(), config_store)?
@@ -277,5 +303,85 @@ fn log_format(
         writeln!(buf, "{}", record.args())
     } else {
         writeln!(buf, "{}: {}", colored_level, record.args())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{resolve_strategy_for_remote, workspace_root_from_config};
+    use crate::launch::ContainerStrategy;
+    use std::path::{Path, PathBuf};
+
+    fn unique_test_dir(name: &str) -> PathBuf {
+        let unique = format!(
+            "vscli-main-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        std::env::temp_dir().join(unique)
+    }
+
+    #[test]
+    fn preserves_project_path_for_external_config() {
+        let root = unique_test_dir("external-config");
+        let config = root
+            .join("configs")
+            .join("rust-dev")
+            .join(".devcontainer")
+            .join("devcontainer.json");
+        let project = root.join("projects").join("my-app");
+
+        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::write(&config, "{}\n").unwrap();
+
+        let (workspace, subfolder) = workspace_root_from_config(&config, &project).unwrap();
+
+        assert_eq!(workspace, project.canonicalize().unwrap());
+        assert_eq!(subfolder, None);
+    }
+
+    #[test]
+    fn derives_subfolder_when_path_is_inside_config_workspace() {
+        let root = unique_test_dir("subfolder");
+        let workspace = root.join("workspace");
+        let config = workspace.join(".devcontainer").join("devcontainer.json");
+        let project = workspace.join("packages").join("api");
+
+        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::write(&config, "{}\n").unwrap();
+
+        let (resolved_workspace, subfolder) =
+            workspace_root_from_config(&config, &project).unwrap();
+
+        assert_eq!(resolved_workspace, workspace.canonicalize().unwrap());
+        assert_eq!(subfolder.as_deref(), Some(Path::new("packages/api")));
+    }
+
+    #[test]
+    fn remote_workspaces_default_to_force_classic() {
+        let strategy = resolve_strategy_for_remote(Some("remote-test"), None).unwrap();
+        assert_eq!(strategy, ContainerStrategy::ForceClassic);
+    }
+
+    #[test]
+    fn remote_workspaces_reject_detect_behavior() {
+        let err = resolve_strategy_for_remote(Some("remote-test"), Some(ContainerStrategy::Detect))
+            .unwrap_err();
+        assert!(err.to_string().contains("not supported with --remote-host"));
+    }
+
+    #[test]
+    fn remote_workspaces_reject_force_container_behavior() {
+        let err = resolve_strategy_for_remote(
+            Some("remote-test"),
+            Some(ContainerStrategy::ForceContainer),
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("not supported with --remote-host"));
     }
 }
