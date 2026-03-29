@@ -28,6 +28,9 @@ pub struct Entry {
     pub config_name: Option<String>,
     /// The path to the vscode workspace
     pub workspace_path: PathBuf,
+    /// The remote SSH host alias, if the workspace was opened remotely.
+    #[serde(default)]
+    pub remote_host: Option<String>,
     /// The path to the dev container config, if it exists
     pub config_path: Option<PathBuf>,
     /// The launch behavior
@@ -41,6 +44,7 @@ pub struct Entry {
 impl PartialEq for Entry {
     fn eq(&self, other: &Self) -> bool {
         self.workspace_path == other.workspace_path
+            && self.remote_host == other.remote_host
             && self.config_path == other.config_path
             && self.behavior == other.behavior
     }

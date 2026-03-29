@@ -18,7 +18,7 @@ mod workspace;
 
 use chrono::Utc;
 use clap::Parser;
-use color_eyre::eyre::{Result, WrapErr};
+use color_eyre::eyre::{Result, WrapErr, bail};
 use log::trace;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -28,7 +28,7 @@ use crate::history::{Entry, Tracker};
 
 use crate::{
     launch::{Behavior, Setup},
-    opts::Opts,
+    opts::{LaunchArgs, Opts},
     workspace::Workspace,
 };
 
@@ -77,6 +77,127 @@ fn workspace_root_from_config(
     Ok((root, sub))
 }
 
+fn open_workspace(
+    path: &Path,
+    launch: LaunchArgs,
+    tracker: &mut Tracker,
+    config_store: &ConfigStore,
+    dry_run: bool,
+) -> Result<()> {
+    if launch.remote_host.is_some() && launch.config.is_some() {
+        bail!(
+            "--config cannot be combined with --remote-host; point vscli at the remote workspace path instead."
+        );
+    }
+
+    let resolved_config = resolve_launch_config(launch.config.as_ref(), config_store)?;
+    let config_name = resolved_config
+        .as_ref()
+        .and_then(|p| config_store::config_name_from_path(p, config_store));
+
+    let (workspace_path, subfolder) = if let Some(ref config) = resolved_config {
+        workspace_root_from_config(config, path)?
+    } else {
+        (path.to_path_buf(), None)
+    };
+
+    let ws = if let Some(remote_host) = launch.remote_host.clone() {
+        Workspace::from_remote_path(&workspace_path, remote_host)?
+    } else {
+        Workspace::from_path(&workspace_path)?
+    };
+    let ws_name = ws.name.clone();
+    let tracked_workspace_path = ws.path.clone();
+    let remote_host = ws.remote_host.clone();
+
+    let behavior = Behavior {
+        strategy: launch.behavior.unwrap_or_default(),
+        args: launch.args,
+        command: launch.command.unwrap_or_else(|| "code".to_string()),
+    };
+    let setup = Setup::new(ws, behavior.clone(), dry_run);
+    let dev_container = setup.launch(resolved_config, subfolder.as_deref())?;
+
+    tracker.history.upsert(Entry {
+        workspace_name: ws_name,
+        dev_container_name: dev_container.as_ref().and_then(|dc| dc.name.clone()),
+        config_name,
+        workspace_path: tracked_workspace_path,
+        remote_host,
+        config_path: dev_container.map(|dc| dc.config_path),
+        behavior,
+        last_opened: Utc::now(),
+    });
+
+    Ok(())
+}
+
+fn reopen_recent(
+    launch: LaunchArgs,
+    tracker: &mut Tracker,
+    config_store: &ConfigStore,
+    dry_run: bool,
+    hide_instructions: bool,
+    hide_info: bool,
+) -> Result<()> {
+    let res = ui::start(tracker, hide_instructions, hide_info)?;
+    if let Some((id, mut entry)) = res {
+        if launch.remote_host.is_some() && launch.config.is_some() {
+            bail!(
+                "--config cannot be combined with --remote-host; point vscli at the remote workspace path instead."
+            );
+        }
+
+        let remote_host = launch.remote_host.clone().or(entry.remote_host.clone());
+        let ws = if let Some(remote_host) = remote_host.clone() {
+            Workspace::from_remote_path(&entry.workspace_path, remote_host)?
+        } else {
+            Workspace::from_path(&entry.workspace_path)?
+        };
+        let ws_name = ws.name.clone();
+        let tracked_workspace_path = ws.path.clone();
+
+        if let Some(cmd) = launch.command {
+            entry.behavior.command = cmd;
+        }
+        if let Some(beh) = launch.behavior {
+            entry.behavior.strategy = beh;
+        }
+        if !launch.args.is_empty() {
+            entry.behavior.args = launch.args;
+        }
+
+        let resolved_config = if launch.config.is_some() {
+            resolve_launch_config(launch.config.as_ref(), config_store)?
+        } else {
+            entry.config_path.clone()
+        };
+
+        let config_name = resolved_config
+            .as_ref()
+            .and_then(|p| config_store::config_name_from_path(p, config_store));
+
+        let setup = Setup::new(ws, entry.behavior.clone(), dry_run);
+        let dev_container = setup.launch(resolved_config, None)?;
+
+        tracker.history.update(
+            id,
+            Entry {
+                workspace_name: ws_name,
+                dev_container_name: dev_container.as_ref().and_then(|dc| dc.name.clone()),
+                config_name,
+                workspace_path: tracked_workspace_path,
+                remote_host,
+                config_path: dev_container.map(|dc| dc.config_path),
+                behavior: entry.behavior.clone(),
+                last_opened: Utc::now(),
+            },
+        );
+    }
+
+    Ok(())
+}
+
 fn main() -> Result<()> {
     color_eyre::install()?;
 
@@ -95,38 +216,7 @@ fn main() -> Result<()> {
     match opts.command {
         opts::Commands::Open { path, launch } => {
             let mut tracker = load_tracker(opts.history_path)?;
-
-            let resolved_config = resolve_launch_config(launch.config.as_ref(), &config_store)?;
-            let config_name = resolved_config
-                .as_ref()
-                .and_then(|p| config_store::config_name_from_path(p, &config_store));
-
-            let (workspace_path, subfolder) = if let Some(ref config) = resolved_config {
-                workspace_root_from_config(config, &path)?
-            } else {
-                (path.clone(), None)
-            };
-
-            let ws = Workspace::from_path(&workspace_path)?;
-            let ws_name = ws.name.clone();
-
-            let behavior = Behavior {
-                strategy: launch.behavior.unwrap_or_default(),
-                args: launch.args,
-                command: launch.command.unwrap_or_else(|| "code".to_string()),
-            };
-            let setup = Setup::new(ws, behavior.clone(), opts.dry_run);
-            let dev_container = setup.launch(resolved_config, subfolder.as_deref())?;
-
-            tracker.history.upsert(Entry {
-                workspace_name: ws_name,
-                dev_container_name: dev_container.as_ref().and_then(|dc| dc.name.clone()),
-                config_name,
-                workspace_path: workspace_path.canonicalize()?,
-                config_path: dev_container.map(|dc| dc.config_path),
-                behavior,
-                last_opened: Utc::now(),
-            });
+            open_workspace(&path, launch, &mut tracker, &config_store, opts.dry_run)?;
             tracker.store()?;
         }
         opts::Commands::Recent {
@@ -135,47 +225,14 @@ fn main() -> Result<()> {
             hide_info,
         } => {
             let mut tracker = load_tracker(opts.history_path)?;
-            let res = ui::start(&mut tracker, hide_instructions, hide_info)?;
-            if let Some((id, mut entry)) = res {
-                let ws = Workspace::from_path(&entry.workspace_path)?;
-                let ws_name = ws.name.clone();
-
-                if let Some(cmd) = launch.command {
-                    entry.behavior.command = cmd;
-                }
-                if let Some(beh) = launch.behavior {
-                    entry.behavior.strategy = beh;
-                }
-                if !launch.args.is_empty() {
-                    entry.behavior.args = launch.args;
-                }
-
-                let resolved_config = if launch.config.is_some() {
-                    resolve_launch_config(launch.config.as_ref(), &config_store)?
-                } else {
-                    entry.config_path.clone()
-                };
-
-                let config_name = resolved_config
-                    .as_ref()
-                    .and_then(|p| config_store::config_name_from_path(p, &config_store));
-
-                let setup = Setup::new(ws, entry.behavior.clone(), opts.dry_run);
-                let dev_container = setup.launch(resolved_config, None)?;
-
-                tracker.history.update(
-                    id,
-                    Entry {
-                        workspace_name: ws_name,
-                        dev_container_name: dev_container.as_ref().and_then(|dc| dc.name.clone()),
-                        config_name,
-                        workspace_path: entry.workspace_path.clone(),
-                        config_path: dev_container.map(|dc| dc.config_path),
-                        behavior: entry.behavior.clone(),
-                        last_opened: Utc::now(),
-                    },
-                );
-            }
+            reopen_recent(
+                launch,
+                &mut tracker,
+                &config_store,
+                opts.dry_run,
+                hide_instructions,
+                hide_info,
+            )?;
             tracker.store()?;
         }
         opts::Commands::Config { action } => {

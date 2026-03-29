@@ -1,0 +1,9 @@
+services:
+  remote-host:
+    build:
+      context: ../..
+      dockerfile: tests/remote-host/Dockerfile
+    environment:
+      AUTHORIZED_KEY: ${AUTHORIZED_KEY:?set AUTHORIZED_KEY to an SSH public key}
+    ports:
+      - "2222:22"

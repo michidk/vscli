@@ -142,6 +142,7 @@ Both the `open` and `recent` commands share the same set of launch arguments:
 - `--command`: Specify which editor command to use (e.g., "code", "code-insiders", "cursor")
 - `--behavior`: Set the launch behavior ("detect", "force-container", "force-classic")
 - `--config`: Override the path to the dev container config file, or pass a config name to resolve from the config directory
+- `--remote-host`: Open the given path on a remote SSH host alias configured for VS Code Remote SSH
 - Additional arguments can be passed to the editor executable by specifying them after `--`
 
 The `recent` command additionally supports:
@@ -259,6 +260,7 @@ You can specify which editor command to use with the `--command` flag:
 vscli open --command cursor .        # open using cursor editor
 vscli open --command code .          # open using vscode (default)
 vscli open --command code-insiders . # open using vscode insiders
+vscli open --remote-host my-ec2 /home/ec2-user/app  # open a remote folder over SSH
 ```
 
 Additional arguments can be passed to the editor executable, by specifying them after `--`:
@@ -297,11 +299,24 @@ vscli open --config rust-dev ~/projects/my-app   # open any project with the "ru
 vscli open --config rust-dev ~/projects/other    # reuse the same config for a different project
 ```
 
+#### Remote SSH Hosts
+
+If you already use VS Code Remote SSH, you can point `vscli` at a remote host alias and remote path:
+
+```sh
+vscli open --remote-host my-ec2 /home/ec2-user/app
+vscli open --remote-host my-ec2 --behavior force-container /home/ec2-user/app
+vscli recent --remote-host my-ec2
+```
+
+This opens the workspace using a `vscode-remote://ssh-remote+...` folder URI. If the remote folder contains a `.devcontainer` setup, VS Code Dev Containers can reopen it in a container on that remote host.
+
 #### Environment Variables
 
 | Variable | Description |
 | --- | --- |
 | `VSCLI_CONFIG_DIR` | Override the config directory (default: `~/.local/share/vscli/configs`) |
 | `VSCLI_EDITOR` | Editor command for `config ui` and `container ui` (default: `code`) |
+| `VSCLI_REMOTE_HOST` | Default remote SSH host alias for `open` and `recent` |
 | `HISTORY_PATH` | Override the history file path |
 | `DRY_RUN` | Enable dry-run mode |
