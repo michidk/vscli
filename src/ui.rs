@@ -15,7 +15,7 @@ use nucleo_matcher::{
 };
 use ratatui::{
     Frame, Terminal,
-    backend::{Backend, CrosstermBackend},
+    backend::CrosstermBackend,
     layout::{Constraint, Layout},
     prelude::{Alignment, Rect},
     style::{Color, Style},
@@ -25,8 +25,8 @@ use ratatui::{
         ScrollbarState, Table, TableState,
     },
 };
+use ratatui_textarea::TextArea;
 use std::{borrow::Cow, io};
-use tui_textarea::TextArea;
 
 use crate::history::{Entry, EntryId, History, Tracker};
 
@@ -160,7 +160,7 @@ enum AppAction {
     SelectLast,
     OpenSelected,
     DeleteSelectedEntry,
-    SearchInput(tui_textarea::Input),
+    SearchInput(ratatui_textarea::Input),
     TableClick(u16),
 }
 
@@ -436,8 +436,8 @@ fn sorted_history_items(history: &History) -> Vec<HistoryItem> {
     items
 }
 
-fn run_app<B: Backend, T: Pickable>(
-    terminal: &mut Terminal<B>,
+fn run_app<T: Pickable>(
+    terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     mut app: PickerState<'_, T>,
     on_delete: Option<&mut dyn FnMut(&T)>,
 ) -> io::Result<Option<T>> {
