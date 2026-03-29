@@ -168,7 +168,7 @@ impl ConfigStore {
     fn validate_name(name: &str) -> Result<()> {
         if name.is_empty()
             || name.contains('/')
-            || name.contains('\\')
+            || (cfg!(windows) && name.contains('\\'))
             || name.contains('\0')
             || name == "."
             || name == ".."
