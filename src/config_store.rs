@@ -115,6 +115,7 @@ impl ConfigStore {
 
     /// Creates a minimal config with the given name.
     pub fn add(&self, name: &str) -> Result<PathBuf> {
+        Self::validate_name(name)?;
         let root = self.dir.join(name);
         if root.exists() {
             bail!("Config '{}' already exists at: {}", name, root.display());
@@ -138,6 +139,7 @@ impl ConfigStore {
 
     /// Removes a config by name.
     pub fn rm(&self, name: &str) -> Result<()> {
+        Self::validate_name(name)?;
         let root = self.dir.join(name);
         if !root.exists() {
             bail!("Config '{}' not found", name);
@@ -160,6 +162,19 @@ impl ConfigStore {
         std::fs::remove_dir_all(&root)
             .wrap_err_with(|| format!("Failed to remove config: {}", root.display()))?;
 
+        Ok(())
+    }
+
+    fn validate_name(name: &str) -> Result<()> {
+        if name.is_empty()
+            || name.contains('/')
+            || name.contains('\\')
+            || name.contains('\0')
+            || name == "."
+            || name == ".."
+        {
+            bail!("Invalid config name: '{name}'");
+        }
         Ok(())
     }
 

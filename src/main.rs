@@ -32,6 +32,16 @@ use crate::{
     workspace::Workspace,
 };
 
+fn load_tracker(history_path: Option<PathBuf>) -> Result<Tracker> {
+    let path = history_path.unwrap_or_else(|| {
+        let mut p = dirs::data_local_dir().expect("Local data dir not found.");
+        p.push("vscli");
+        p.push("history.json");
+        p
+    });
+    Tracker::load(path)
+}
+
 fn resolve_launch_config(config: Option<&PathBuf>, store: &ConfigStore) -> Result<Option<PathBuf>> {
     config
         .map(|c| {
@@ -57,20 +67,9 @@ fn main() -> Result<()> {
 
     let config_store = ConfigStore::new(opts.config_dir);
 
-    let mut tracker = {
-        let tracker_path = if let Some(path) = opts.history_path {
-            path
-        } else {
-            let mut tracker_path = dirs::data_local_dir().expect("Local data dir not found.");
-            tracker_path.push("vscli");
-            tracker_path.push("history.json");
-            tracker_path
-        };
-        Tracker::load(tracker_path)?
-    };
-
     match opts.command {
         opts::Commands::Open { path, launch } => {
+            let mut tracker = load_tracker(opts.history_path)?;
             let path = path.as_path();
             let ws = Workspace::from_path(path)?;
             let ws_name = ws.name.clone();
@@ -97,12 +96,14 @@ fn main() -> Result<()> {
                 behavior,
                 last_opened: Utc::now(),
             });
+            tracker.store()?;
         }
         opts::Commands::Recent {
             launch,
             hide_instructions,
             hide_info,
         } => {
+            let mut tracker = load_tracker(opts.history_path)?;
             let res = ui::start(&mut tracker, hide_instructions, hide_info)?;
             if let Some((id, mut entry)) = res {
                 let ws = Workspace::from_path(&entry.workspace_path)?;
@@ -144,6 +145,7 @@ fn main() -> Result<()> {
                     },
                 );
             }
+            tracker.store()?;
         }
         opts::Commands::Config { action } => {
             let editor = std::env::var("VSCLI_EDITOR").unwrap_or_else(|_| "code".to_string());
@@ -154,8 +156,6 @@ fn main() -> Result<()> {
             container::run_command(action, &editor)?;
         }
     }
-
-    tracker.store()?;
 
     Ok(())
 }

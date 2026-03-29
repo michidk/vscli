@@ -128,7 +128,10 @@ impl Setup {
                     trace!("Selected the only existing dev container.");
                     Ok(dev_containers.into_iter().next())
                 }
-                _ => Ok(crate::ui::pick_devcontainer(dev_containers)?),
+                _ => Ok(Some(
+                    crate::ui::pick_devcontainer(dev_containers)?
+                        .ok_or_else(|| eyre!("Dev container selection cancelled"))?,
+                )),
             }
         }
     }
