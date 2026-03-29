@@ -13,6 +13,7 @@ keywords = ["development", "settings", "cli"]
 categories = ["command-line-utilities"]
 
 [dependencies]
+bollard = "0.20"
 chrono = { version = "0.4.38", default-features = false, features = ["std", "clock", "serde"]}
 clap-verbosity-flag = "3.0.0"
 clap = { version = "4.5.4", features = ["derive", "color", "help", "usage", "suggestions", "wrap_help", "env"] }
@@ -21,12 +22,12 @@ crossterm = { version = "0.28.1"}
 dirs = "6.0.0"
 env_logger = "0.11.3"
 hex = "0.4.3"
-inquire = "0.7.5"
 json5 = "0.4.1"
 log = "0.4.21"
 ratatui = { version = "0.29.0"}
 serde = { version = "1.0.199", features = ["derive"] }
 serde_json = "1.0.116"
+tokio = { version = "1", features = ["rt", "time"] }
 url = "2.5.0"
 walkdir = "2.5.0"
 wslpath2 = "0.1.3"

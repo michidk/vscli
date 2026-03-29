@@ -7,6 +7,8 @@
 
 //! A CLI tool to launch vscode projects, which supports dev container.
 
+mod config_store;
+mod container;
 mod history;
 mod launch;
 mod opts;
@@ -19,7 +21,9 @@ use clap::Parser;
 use color_eyre::eyre::Result;
 use log::trace;
 use std::io::Write;
+use std::path::PathBuf;
 
+use crate::config_store::ConfigStore;
 use crate::history::{Entry, Tracker};
 
 use crate::{
@@ -28,7 +32,26 @@ use crate::{
     workspace::Workspace,
 };
 
-/// Entry point for `vscli`.
+fn load_tracker(history_path: Option<PathBuf>) -> Result<Tracker> {
+    let path = history_path.unwrap_or_else(|| {
+        let mut p = dirs::data_local_dir().expect("Local data dir not found.");
+        p.push("vscli");
+        p.push("history.json");
+        p
+    });
+    Tracker::load(path)
+}
+
+fn resolve_launch_config(config: Option<&PathBuf>, store: &ConfigStore) -> Result<Option<PathBuf>> {
+    config
+        .map(|c| {
+            store
+                .resolve(c)
+                .ok_or_else(|| color_eyre::eyre::eyre!("Config not found: {}", c.display()))
+        })
+        .transpose()
+}
+
 fn main() -> Result<()> {
     color_eyre::install()?;
 
@@ -42,86 +65,79 @@ fn main() -> Result<()> {
 
     trace!("Parsed Opts:\n{opts_dbg}");
 
-    // Setup the tracker
-    let mut tracker = {
-        let tracker_path = if let Some(path) = opts.history_path {
-            path
-        } else {
-            let mut tracker_path = dirs::data_local_dir().expect("Local data dir not found.");
-            tracker_path.push("vscli");
-            tracker_path.push("history.json");
-            tracker_path
-        };
-        Tracker::load(tracker_path)?
-    };
+    let config_store = ConfigStore::new(opts.config_dir);
 
     match opts.command {
         opts::Commands::Open { path, launch } => {
-            // Get workspace from args
+            let mut tracker = load_tracker(opts.history_path)?;
             let path = path.as_path();
             let ws = Workspace::from_path(path)?;
             let ws_name = ws.name.clone();
 
-            // Open the container
+            let resolved_config = resolve_launch_config(launch.config.as_ref(), &config_store)?;
+            let config_name = resolved_config
+                .as_ref()
+                .and_then(|p| config_store::config_name_from_path(p, &config_store));
+
             let behavior = Behavior {
                 strategy: launch.behavior.unwrap_or_default(),
                 args: launch.args,
                 command: launch.command.unwrap_or_else(|| "code".to_string()),
             };
             let setup = Setup::new(ws, behavior.clone(), opts.dry_run);
-            let dev_container = setup.launch(launch.config)?;
+            let dev_container = setup.launch(resolved_config)?;
 
-            // Store the workspace in the history
             tracker.history.upsert(Entry {
                 workspace_name: ws_name,
                 dev_container_name: dev_container.as_ref().and_then(|dc| dc.name.clone()),
+                config_name,
                 workspace_path: path.canonicalize()?,
                 config_path: dev_container.map(|dc| dc.config_path),
                 behavior,
                 last_opened: Utc::now(),
             });
+            tracker.store()?;
         }
         opts::Commands::Recent {
             launch,
             hide_instructions,
             hide_info,
         } => {
-            // Get workspace from user selection
+            let mut tracker = load_tracker(opts.history_path)?;
             let res = ui::start(&mut tracker, hide_instructions, hide_info)?;
             if let Some((id, mut entry)) = res {
                 let ws = Workspace::from_path(&entry.workspace_path)?;
                 let ws_name = ws.name.clone();
 
-                // Override command if specified
                 if let Some(cmd) = launch.command {
                     entry.behavior.command = cmd;
                 }
-
-                // Override behavior if specified
                 if let Some(beh) = launch.behavior {
                     entry.behavior.strategy = beh;
                 }
-
-                // Override args if specified and non-empty
                 if !launch.args.is_empty() {
                     entry.behavior.args = launch.args;
                 }
 
-                // Override config if specified
-                if launch.config.is_some() {
-                    entry.config_path = launch.config;
-                }
+                let resolved_config = if launch.config.is_some() {
+                    resolve_launch_config(launch.config.as_ref(), &config_store)?
+                } else {
+                    entry.config_path.clone()
+                };
 
-                // Open the container
+                let config_name = resolved_config
+                    .as_ref()
+                    .and_then(|p| config_store::config_name_from_path(p, &config_store));
+
                 let setup = Setup::new(ws, entry.behavior.clone(), opts.dry_run);
-                let dev_container = setup.launch(entry.config_path)?;
+                let dev_container = setup.launch(resolved_config)?;
 
-                // Update the tracker entry
                 tracker.history.update(
                     id,
                     Entry {
                         workspace_name: ws_name,
                         dev_container_name: dev_container.as_ref().and_then(|dc| dc.name.clone()),
+                        config_name,
                         workspace_path: entry.workspace_path.clone(),
                         config_path: dev_container.map(|dc| dc.config_path),
                         behavior: entry.behavior.clone(),
@@ -129,10 +145,17 @@ fn main() -> Result<()> {
                     },
                 );
             }
+            tracker.store()?;
+        }
+        opts::Commands::Config { action } => {
+            let editor = std::env::var("VSCLI_EDITOR").unwrap_or_else(|_| "code".to_string());
+            config_store::run_command(action, &config_store, &editor)?;
+        }
+        opts::Commands::Container { action } => {
+            let editor = std::env::var("VSCLI_EDITOR").unwrap_or_else(|_| "code".to_string());
+            container::run_command(action, &editor)?;
         }
     }
-
-    tracker.store()?;
 
     Ok(())
 }

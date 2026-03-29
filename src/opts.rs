@@ -1,6 +1,6 @@
 use std::{ffi::OsString, path::PathBuf};
 
-use clap::{Args, Parser, Subcommand, command};
+use clap::{Args, Parser, Subcommand};
 
 use crate::launch::ContainerStrategy;
 
@@ -17,6 +17,10 @@ pub(crate) struct Opts {
     /// Overwrite the default path to the history file
     #[arg(short = 's', long, env, global = true)]
     pub history_path: Option<PathBuf>,
+
+    /// Overwrite the default path to the config directory
+    #[arg(long, env = "VSCLI_CONFIG_DIR", global = true)]
+    pub config_dir: Option<PathBuf>,
 
     /// Whether to launch in dry-run mode (not actually open vscode)
     #[arg(short, long, alias = "dry", env, global = true)]
@@ -42,7 +46,7 @@ pub(crate) struct LaunchArgs {
     #[arg(short, long, ignore_case = true)]
     pub behavior: Option<ContainerStrategy>,
 
-    /// Overwrites the path to the dev container config file
+    /// Overwrites the path to the dev container config file (accepts a path or a config name)
     #[arg(long, env)]
     pub config: Option<PathBuf>,
 
@@ -76,5 +80,65 @@ pub(crate) enum Commands {
 
         #[command(flatten)]
         launch: LaunchArgs,
+    },
+    /// Manage external devcontainer configurations.
+    #[clap(alias = "cfg")]
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
+    },
+    /// Manage running devcontainers.
+    #[clap(alias = "ct")]
+    Container {
+        #[command(subcommand)]
+        action: ContainerAction,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub(crate) enum ConfigAction {
+    /// Open interactive config picker.
+    Ui,
+    /// List available configs.
+    #[clap(alias = "ls")]
+    List {
+        /// Show full paths and descriptions.
+        #[arg(short, long)]
+        long: bool,
+    },
+    /// Print the config directory path.
+    Dir,
+    /// Create a new minimal devcontainer config.
+    Add {
+        /// Name for the new config.
+        name: String,
+    },
+    /// Remove a config by name.
+    Rm {
+        /// Name of the config to remove.
+        name: String,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub(crate) enum ContainerAction {
+    /// Open interactive container picker.
+    Ui,
+    /// List devcontainers.
+    #[clap(alias = "ls")]
+    List {
+        /// Include stopped containers.
+        #[arg(short, long)]
+        all: bool,
+    },
+    /// Show detailed information about a devcontainer.
+    Info {
+        /// Container ID or ID prefix.
+        id: String,
+    },
+    /// Stop a running devcontainer.
+    Stop {
+        /// Container ID or ID prefix.
+        id: String,
     },
 }
