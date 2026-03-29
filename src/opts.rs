@@ -117,6 +117,15 @@ pub(crate) enum ConfigAction {
         /// Name for the new config.
         name: String,
     },
+    /// Copy a stored config into a target directory.
+    #[clap(alias = "cp")]
+    Copy {
+        /// Name of the stored config to copy.
+        name: String,
+        /// Directory to copy the config into.
+        #[arg(value_parser, default_value = ".")]
+        path: PathBuf,
+    },
     /// Remove a config by name.
     Rm {
         /// Name of the config to remove.

@@ -165,6 +165,43 @@ impl ConfigStore {
         Ok(())
     }
 
+    /// Copies a stored config into the given target directory.
+    pub fn copy_into(&self, name: &str, target_dir: &Path) -> Result<PathBuf> {
+        Self::validate_name(name)?;
+
+        let source_root = self.dir.join(name);
+        if !source_root.is_dir() {
+            bail!("Config '{}' not found", name);
+        }
+
+        if !target_dir.exists() {
+            bail!("Target directory does not exist: {}", target_dir.display());
+        }
+        if !target_dir.is_dir() {
+            bail!("Target path is not a directory: {}", target_dir.display());
+        }
+
+        for entry in std::fs::read_dir(&source_root).wrap_err_with(|| {
+            format!("Failed to read config directory: {}", source_root.display())
+        })? {
+            let entry = entry.wrap_err("Failed to read config directory entry")?;
+            let source_path = entry.path();
+            let destination_path = target_dir.join(entry.file_name());
+            Self::ensure_copy_target_available(&source_path, &destination_path)?;
+        }
+
+        for entry in std::fs::read_dir(&source_root).wrap_err_with(|| {
+            format!("Failed to read config directory: {}", source_root.display())
+        })? {
+            let entry = entry.wrap_err("Failed to read config directory entry")?;
+            let source_path = entry.path();
+            let destination_path = target_dir.join(entry.file_name());
+            Self::copy_entry(&source_path, &destination_path)?;
+        }
+
+        Ok(target_dir.join(".devcontainer"))
+    }
+
     fn validate_name(name: &str) -> Result<()> {
         if name.is_empty()
             || name.contains('/')
@@ -175,6 +212,67 @@ impl ConfigStore {
         {
             bail!("Invalid config name: '{name}'");
         }
+        Ok(())
+    }
+
+    fn ensure_copy_target_available(source: &Path, destination: &Path) -> Result<()> {
+        if destination.exists() {
+            bail!(
+                "Refusing to overwrite existing path: {}",
+                destination.display()
+            );
+        }
+
+        if source.is_dir() {
+            for entry in std::fs::read_dir(source).wrap_err_with(|| {
+                format!("Failed to read source directory: {}", source.display())
+            })? {
+                let entry = entry.wrap_err("Failed to read source directory entry")?;
+                let child_source = entry.path();
+                let child_destination = destination.join(entry.file_name());
+                Self::ensure_copy_target_available(&child_source, &child_destination)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn copy_entry(source: &Path, destination: &Path) -> Result<()> {
+        if destination.exists() {
+            bail!(
+                "Refusing to overwrite existing path: {}",
+                destination.display()
+            );
+        }
+
+        if source.is_dir() {
+            std::fs::create_dir_all(destination).wrap_err_with(|| {
+                format!(
+                    "Failed to create destination directory: {}",
+                    destination.display()
+                )
+            })?;
+
+            for entry in std::fs::read_dir(source).wrap_err_with(|| {
+                format!("Failed to read source directory: {}", source.display())
+            })? {
+                let entry = entry.wrap_err("Failed to read source directory entry")?;
+                let child_source = entry.path();
+                let child_destination = destination.join(entry.file_name());
+                Self::copy_entry(&child_source, &child_destination)?;
+            }
+        } else if source.is_file() {
+            std::fs::copy(source, destination).wrap_err_with(|| {
+                format!(
+                    "Failed to copy file from {} to {}",
+                    source.display(),
+                    destination.display()
+                )
+            })?;
+        } else {
+            bail!("Unsupported config entry: {}", source.display());
+        }
+
         Ok(())
     }
 
@@ -295,6 +393,11 @@ pub fn run_command(action: ConfigAction, store: &ConfigStore, editor: &str) -> R
             let root = store.add(&name)?;
             info!("Created config '{}' at {}", name, root.display());
         }
+        ConfigAction::Copy { name, path } => {
+            let target_dir = path.canonicalize().unwrap_or(path);
+            store.copy_into(&name, &target_dir)?;
+            info!("Copied config '{}' into {}", name, target_dir.display());
+        }
         ConfigAction::Rm { name } => {
             let root = store.dir().join(&name);
             eprint!("Remove config '{name}' at {}? [y/N] ", root.display());
@@ -308,4 +411,95 @@ pub fn run_command(action: ConfigAction, store: &ConfigStore, editor: &str) -> R
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ConfigStore;
+    use std::ffi::OsString;
+    use std::path::PathBuf;
+
+    fn unique_test_dir(name: &str) -> PathBuf {
+        let unique = format!(
+            "vscli-config-store-{name}-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        std::env::temp_dir().join(OsString::from(unique))
+    }
+
+    #[test]
+    fn copy_into_copies_config_contents_to_target_directory() {
+        let store_dir = unique_test_dir("copy-success-store");
+        let target_dir = unique_test_dir("copy-success-target");
+        let store = ConfigStore::new(Some(store_dir.clone()));
+
+        std::fs::create_dir_all(&target_dir).unwrap();
+        let created_root = store.add("python-dev").unwrap();
+        let script_path = created_root.join("scripts").join("setup.sh");
+        std::fs::create_dir_all(script_path.parent().unwrap()).unwrap();
+        std::fs::write(&script_path, "#!/bin/sh\n").unwrap();
+
+        let copied_path = store.copy_into("python-dev", &target_dir).unwrap();
+
+        assert_eq!(copied_path, target_dir.join(".devcontainer"));
+        assert!(
+            target_dir
+                .join(".devcontainer")
+                .join("devcontainer.json")
+                .is_file()
+        );
+        assert!(target_dir.join("scripts").join("setup.sh").is_file());
+    }
+
+    #[test]
+    fn copy_into_refuses_to_overwrite_existing_paths() {
+        let store_dir = unique_test_dir("copy-overwrite-store");
+        let target_dir = unique_test_dir("copy-overwrite-target");
+        let store = ConfigStore::new(Some(store_dir));
+
+        std::fs::create_dir_all(target_dir.join(".devcontainer")).unwrap();
+        std::fs::write(
+            target_dir.join(".devcontainer").join("devcontainer.json"),
+            "{}\n",
+        )
+        .unwrap();
+        store.add("python-dev").unwrap();
+
+        let err = store.copy_into("python-dev", &target_dir).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("Refusing to overwrite existing path")
+        );
+    }
+
+    #[test]
+    fn copy_into_does_not_partially_write_when_nested_conflict_exists() {
+        let store_dir = unique_test_dir("copy-nested-conflict-store");
+        let target_dir = unique_test_dir("copy-nested-conflict-target");
+        let store = ConfigStore::new(Some(store_dir.clone()));
+
+        std::fs::create_dir_all(&target_dir).unwrap();
+        let created_root = store.add("python-dev").unwrap();
+        let scripts_dir = created_root.join("scripts");
+        std::fs::create_dir_all(&scripts_dir).unwrap();
+        std::fs::write(created_root.join("README.md"), "template\n").unwrap();
+        std::fs::write(scripts_dir.join("setup.sh"), "#!/bin/sh\n").unwrap();
+
+        std::fs::create_dir_all(target_dir.join("scripts")).unwrap();
+        std::fs::write(target_dir.join("scripts").join("setup.sh"), "existing\n").unwrap();
+
+        let err = store.copy_into("python-dev", &target_dir).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("Refusing to overwrite existing path")
+        );
+        assert!(!target_dir.join(".devcontainer").exists());
+        assert!(!target_dir.join("README.md").exists());
+    }
 }

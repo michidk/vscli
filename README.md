@@ -157,6 +157,8 @@ Configs are directories containing `.devcontainer/devcontainer.json`. They can b
 
 ```sh
 vscli config add python-dev           # create a minimal config
+vscli config copy python-dev          # copy a stored config into the current directory
+vscli config copy python-dev ~/work   # copy a stored config into another directory
 vscli config list                     # list available configs
 vscli config list --long              # list with descriptions and paths
 vscli config ui                       # interactive picker (opens selected config for editing)
@@ -300,6 +302,13 @@ vscli config add rust-dev                        # create a minimal config named
 # edit ~/.local/share/vscli/configs/rust-dev/.devcontainer/devcontainer.json to your liking
 vscli open --config rust-dev ~/projects/my-app   # open any project with the "rust-dev" config
 vscli open --config rust-dev ~/projects/other    # reuse the same config for a different project
+```
+
+If you want to start from a stored config and make it project-local, copy it into your repo first:
+
+```sh
+vscli config copy rust-dev                        # copy into the current directory
+vscli config copy rust-dev ~/projects/my-app     # copy into another project directory
 ```
 
 #### Remote SSH Hosts
