@@ -187,6 +187,15 @@ impl ConfigStore {
             let entry = entry.wrap_err("Failed to read config directory entry")?;
             let source_path = entry.path();
             let destination_path = target_dir.join(entry.file_name());
+            Self::ensure_copy_target_available(&source_path, &destination_path)?;
+        }
+
+        for entry in std::fs::read_dir(&source_root).wrap_err_with(|| {
+            format!("Failed to read config directory: {}", source_root.display())
+        })? {
+            let entry = entry.wrap_err("Failed to read config directory entry")?;
+            let source_path = entry.path();
+            let destination_path = target_dir.join(entry.file_name());
             Self::copy_entry(&source_path, &destination_path)?;
         }
 
@@ -203,6 +212,28 @@ impl ConfigStore {
         {
             bail!("Invalid config name: '{name}'");
         }
+        Ok(())
+    }
+
+    fn ensure_copy_target_available(source: &Path, destination: &Path) -> Result<()> {
+        if destination.exists() {
+            bail!(
+                "Refusing to overwrite existing path: {}",
+                destination.display()
+            );
+        }
+
+        if source.is_dir() {
+            for entry in std::fs::read_dir(source).wrap_err_with(|| {
+                format!("Failed to read source directory: {}", source.display())
+            })? {
+                let entry = entry.wrap_err("Failed to read source directory entry")?;
+                let child_source = entry.path();
+                let child_destination = destination.join(entry.file_name());
+                Self::ensure_copy_target_available(&child_source, &child_destination)?;
+            }
+        }
+
         Ok(())
     }
 
@@ -444,5 +475,31 @@ mod tests {
             err.to_string()
                 .contains("Refusing to overwrite existing path")
         );
+    }
+
+    #[test]
+    fn copy_into_does_not_partially_write_when_nested_conflict_exists() {
+        let store_dir = unique_test_dir("copy-nested-conflict-store");
+        let target_dir = unique_test_dir("copy-nested-conflict-target");
+        let store = ConfigStore::new(Some(store_dir.clone()));
+
+        std::fs::create_dir_all(&target_dir).unwrap();
+        let created_root = store.add("python-dev").unwrap();
+        let scripts_dir = created_root.join("scripts");
+        std::fs::create_dir_all(&scripts_dir).unwrap();
+        std::fs::write(created_root.join("README.md"), "template\n").unwrap();
+        std::fs::write(scripts_dir.join("setup.sh"), "#!/bin/sh\n").unwrap();
+
+        std::fs::create_dir_all(target_dir.join("scripts")).unwrap();
+        std::fs::write(target_dir.join("scripts").join("setup.sh"), "existing\n").unwrap();
+
+        let err = store.copy_into("python-dev", &target_dir).unwrap_err();
+
+        assert!(
+            err.to_string()
+                .contains("Refusing to overwrite existing path")
+        );
+        assert!(!target_dir.join(".devcontainer").exists());
+        assert!(!target_dir.join("README.md").exists());
     }
 }
