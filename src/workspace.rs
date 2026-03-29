@@ -1,7 +1,6 @@
 use color_eyre::eyre::{Result, WrapErr, bail, eyre};
 use log::{debug, trace};
 use std::ffi::OsString;
-use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use walkdir::WalkDir;
@@ -13,18 +12,6 @@ pub struct DevContainer {
     pub config_path: PathBuf,
     pub name: Option<String>,
     pub workspace_path_in_container: String,
-}
-
-// Used in the inquire select prompt
-impl Display for DevContainer {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let path = self.config_path.display();
-        if let Some(name) = &self.name {
-            write!(f, "{name} ({path})")
-        } else {
-            write!(f, "{path}")
-        }
-    }
 }
 
 impl DevContainer {
@@ -369,4 +356,22 @@ mod tests {
         let result = DevContainer::substitute_variables(folder, "my-project");
         assert_eq!(result, "/custom/path");
     }
+}
+
+/// Converts a Docker label path (which may be a Windows/WSL path) to a local filesystem path.
+#[cfg(unix)]
+pub fn resolve_local_path(path: &str) -> String {
+    if (path.starts_with("\\\\wsl") || path.starts_with("//wsl"))
+        && let Ok(converted) =
+            wslpath2::convert(path, None, wslpath2::Conversion::WindowsToWsl, true)
+    {
+        return converted;
+    }
+    path.to_string()
+}
+
+/// Converts a Docker label path (which may be a Windows/WSL path) to a local filesystem path.
+#[cfg(windows)]
+pub fn resolve_local_path(path: &str) -> String {
+    path.to_string()
 }

@@ -2,7 +2,6 @@ use std::{ffi::OsString, fmt::Display, path::PathBuf, str::FromStr};
 
 use clap::ValueEnum;
 use color_eyre::eyre::{self, Result, bail, eyre};
-use inquire::Select;
 use log::{info, trace};
 use serde::{Deserialize, Serialize};
 
@@ -129,13 +128,7 @@ impl Setup {
                     trace!("Selected the only existing dev container.");
                     Ok(dev_containers.into_iter().next())
                 }
-                _ => Ok(Some(
-                    Select::new(
-                        "Multiple dev containers found! Please select one:",
-                        dev_containers,
-                    )
-                    .prompt()?,
-                )),
+                _ => Ok(crate::ui::pick_devcontainer(dev_containers)?),
             }
         }
     }

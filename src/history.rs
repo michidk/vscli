@@ -23,6 +23,9 @@ pub struct Entry {
     pub workspace_name: String,
     /// The name of the dev container, if it exists
     pub dev_container_name: Option<String>,
+    /// The name of the external config used, if any
+    #[serde(default)]
+    pub config_name: Option<String>,
     /// The path to the vscode workspace
     pub workspace_path: PathBuf,
     /// The path to the dev container config, if it exists

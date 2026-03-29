@@ -15,6 +15,8 @@ Read [here](https://blog.lohr.dev/launching-dev-containers) about the journey of
 - Detects whether a project is a [dev container](https://containers.dev/) project, and launches the dev container instead
 - Supports [multiple dev containers](https://github.com/microsoft/vscode-docs/blob/main/remote-release-notes/v1_75.md#folders-with-multiple-devcontainerjson-files) in the same project
 - Tracks your projects and allows you to open them using a CLI-based UI
+- External devcontainer configs: store reusable configs separately and apply them to any project via `--config <name>`
+- Container management: list, inspect and stop running devcontainers
 
 ## Installation
 
@@ -73,12 +75,15 @@ After installation, the `vscli` command will be available:
 Usage: vscli [OPTIONS] <COMMAND>
 
 Commands:
-  open    Opens a dev container
-  recent  Opens an interactive list of recently used workspaces
-  help    Print this message or the help of the given subcommand(s)
+  open       Opens a dev container
+  recent     Opens an interactive list of recently used workspaces
+  config     Manage external devcontainer configurations
+  container  Manage running devcontainers
+  help       Print this message or the help of the given subcommand(s)
 
 Options:
   -s, --history-path <HISTORY_PATH>  Overwrite the default path to the history file [env: HISTORY_PATH=]
+      --config-dir <CONFIG_DIR>      Overwrite the default path to the config directory [env: VSCLI_CONFIG_DIR=]
   -d, --dry-run                      Whether to launch in dry-run mode (not actually open vscode) [env: DRY_RUN=]
   -v, --verbose...                   Increase logging verbosity
   -q, --quiet...                     Decrease logging verbosity
@@ -101,8 +106,9 @@ Options:
   -c, --command <COMMAND>            The editor command to use (e.g. "code", "code-insiders", "cursor") [env: COMMAND=]
   -s, --history-path <HISTORY_PATH>  Overwrite the default path to the history file [env: HISTORY_PATH=]
   -b, --behavior <BEHAVIOR>          Launch behavior [possible values: detect, force-container, force-classic]
+      --config-dir <CONFIG_DIR>      Overwrite the default path to the config directory [env: VSCLI_CONFIG_DIR=]
+      --config <CONFIG>              Overwrites the path to the dev container config file (accepts a path or a config name) [env: CONFIG=]
   -d, --dry-run                      Whether to launch in dry-run mode (not actually open vscode) [env: DRY_RUN=]
-      --config <CONFIG>              Overwrites the path to the dev container config file [env: CONFIG=]
   -v, --verbose...                   Increase logging verbosity
   -q, --quiet...                     Decrease logging verbosity
   -h, --help                         Print help (see more with '--help')
@@ -135,14 +141,56 @@ Both the `open` and `recent` commands share the same set of launch arguments:
 
 - `--command`: Specify which editor command to use (e.g., "code", "code-insiders", "cursor")
 - `--behavior`: Set the launch behavior ("detect", "force-container", "force-classic")
-- `--config`: Override the path to the dev container config file
+- `--config`: Override the path to the dev container config file, or pass a config name to resolve from the config directory
 - Additional arguments can be passed to the editor executable by specifying them after `--`
 
 The `recent` command additionally supports:
 - `--hide-instructions`: Hide the keybinding instructions from the UI
 - `--hide-info`: Hide additional information like strategy, command, args and dev container path
 
+#### Config Management
+
+Manage external devcontainer configurations stored in `~/.local/share/vscli/configs/` (or `$VSCLI_CONFIG_DIR`).
+
+Configs are directories containing `.devcontainer/devcontainer.json`. They can be used with any project via `--config <name>`, decoupling the dev container configuration from the project repository.
+
+```sh
+vscli config add python-dev           # create a minimal config
+vscli config list                     # list available configs
+vscli config list --long              # list with descriptions and paths
+vscli config ui                       # interactive picker (opens selected config for editing)
+vscli config dir                      # print config directory path
+vscli config rm python-dev            # remove a config (with confirmation)
+```
+
+Using a named config to open a project:
+
+```sh
+vscli open --config python-dev ~/my-project   # open project with external config
+```
+
+#### Container Management
+
+List, inspect and stop running devcontainers (queries Docker for containers with devcontainer labels).
+
+```sh
+vscli container list                  # list running devcontainers
+vscli container list -a               # include stopped containers
+vscli container ui                    # interactive picker (select to reopen in VS Code)
+vscli container info <id>             # detailed info (ports, mounts, config)
+vscli container stop <id>             # stop a devcontainer
+```
+
+Short aliases are available: `cfg` for `config`, `ct` for `container`, `ls` for `list`.
+
+```sh
+vscli ct ui                           # same as: vscli container ui
+vscli cfg ls -l                       # same as: vscli config list --long
+```
+
 ##### Keybindings
+
+The following keybindings apply to all interactive TUI screens (`recent`, `config ui`, `container ui`, and multi-devcontainer selection):
 
 | Key/Key Combination             | Action                | Description                            |
 | ------------------------------- | --------------------- | -------------------------------------- |
@@ -177,7 +225,7 @@ The detection algorithm determines which dev container config to launch.
 
 - First, check whether a dev container config was specified via the `--config` flag -> launch it
 - Then loads the first dev container it finds
-  - If more than one exists -> show a interactive list of dev containers and let the user select one
+  - If more than one exists -> show an interactive list of dev containers and let the user select one
   - If one exists -> launch it
   - If none exists -> launch vscode normally without a dev container
 
@@ -237,3 +285,23 @@ vscli recent --hide-info                        # hide additional information li
 ```
 
 The UI mode provides a convenient way to browse and manage your recent workspaces, with customizable display options and full support for all launch configurations.
+
+#### External Configs
+
+You can store dev container configurations outside your project repositories and reference them by name:
+
+```sh
+vscli config add rust-dev                        # create a minimal config named "rust-dev"
+# edit ~/.local/share/vscli/configs/rust-dev/.devcontainer/devcontainer.json to your liking
+vscli open --config rust-dev ~/projects/my-app   # open any project with the "rust-dev" config
+vscli open --config rust-dev ~/projects/other    # reuse the same config for a different project
+```
+
+#### Environment Variables
+
+| Variable | Description |
+| --- | --- |
+| `VSCLI_CONFIG_DIR` | Override the config directory (default: `~/.local/share/vscli/configs`) |
+| `VSCLI_EDITOR` | Editor command for `config ui` and `container ui` (default: `code`) |
+| `HISTORY_PATH` | Override the history file path |
+| `DRY_RUN` | Enable dry-run mode |

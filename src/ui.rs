@@ -30,7 +30,127 @@ use tui_textarea::TextArea;
 
 use crate::history::{Entry, EntryId, History, Tracker};
 
-/// All "user triggered" action which the app might want to perform.
+/// Describes an item that can be rendered and filtered by the generic picker UI.
+pub trait Pickable: Clone {
+    /// Title displayed on top of the table.
+    fn title() -> &'static str;
+
+    /// Header labels for the table columns.
+    fn headers() -> &'static [&'static str];
+
+    /// Table cells representing this item.
+    fn cells(&self) -> Vec<String>;
+
+    /// Fields used by fuzzy search.
+    fn search_fields(&self) -> Vec<String>;
+
+    /// Status lines shown below the table.
+    fn status_lines(&self) -> Vec<String>;
+
+    /// Table column constraints based on computed maximum cell widths.
+    fn column_constraints(max_widths: &[usize]) -> Vec<Constraint>;
+}
+
+/// Configuration options for the generic picker UI.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PickerOpts {
+    /// Hide the instruction line.
+    pub hide_instructions: bool,
+    /// Hide additional status/info lines.
+    pub hide_info: bool,
+}
+
+/// Item wrapper for the recent-workspaces picker.
+#[derive(Debug, Clone)]
+pub struct HistoryItem {
+    /// Unique history entry id.
+    pub id: EntryId,
+    /// Stored history entry.
+    pub entry: Entry,
+}
+
+impl Pickable for HistoryItem {
+    fn title() -> &'static str {
+        "Recent Workspaces"
+    }
+
+    fn headers() -> &'static [&'static str] {
+        &[
+            "Workspace",
+            "Dev Container",
+            "Config",
+            "Path",
+            "Last Opened",
+        ]
+    }
+
+    fn cells(&self) -> Vec<String> {
+        vec![
+            self.entry.workspace_name.clone(),
+            self.entry
+                .dev_container_name
+                .as_deref()
+                .unwrap_or("")
+                .to_string(),
+            self.entry.config_name.as_deref().unwrap_or("").to_string(),
+            self.entry.workspace_path.to_string_lossy().to_string(),
+            DateTime::<Local>::from(self.entry.last_opened)
+                .format("%Y-%m-%d %H:%M:%S")
+                .to_string(),
+        ]
+    }
+
+    fn search_fields(&self) -> Vec<String> {
+        vec![
+            self.entry.workspace_name.clone(),
+            self.entry.dev_container_name.clone().unwrap_or_default(),
+            self.entry.config_name.clone().unwrap_or_default(),
+            self.entry.workspace_path.to_string_lossy().to_string(),
+        ]
+    }
+
+    fn status_lines(&self) -> Vec<String> {
+        let args_count = self.entry.behavior.args.len();
+        let args_joined = self
+            .entry
+            .behavior
+            .args
+            .iter()
+            .map(|arg| arg.to_string_lossy())
+            .collect::<Vec<Cow<'_, str>>>()
+            .join(", ");
+
+        let config_path = self
+            .entry
+            .config_path
+            .as_ref()
+            .map(|path| path.to_string_lossy().into_owned())
+            .unwrap_or_default();
+
+        vec![
+            format!(
+                "Strategy: {} • Command: {} • Args ({args_count}): {args_joined}",
+                self.entry.behavior.strategy, self.entry.behavior.command,
+            ),
+            format!("Dev Container: {config_path}"),
+        ]
+    }
+
+    fn column_constraints(max_widths: &[usize]) -> Vec<Constraint> {
+        let workspace_width = max_widths.first().copied().unwrap_or(20).clamp(9, 60);
+        let devcontainer_width = max_widths.get(1).copied().unwrap_or(20).clamp(9, 60);
+        let config_width = max_widths.get(2).copied().unwrap_or(6).clamp(6, 40);
+
+        vec![
+            Constraint::Min(u16::try_from(workspace_width).unwrap_or(u16::MAX)),
+            Constraint::Min(u16::try_from(devcontainer_width).unwrap_or(u16::MAX)),
+            Constraint::Min(u16::try_from(config_width).unwrap_or(u16::MAX)),
+            Constraint::Percentage(70),
+            Constraint::Min(20),
+        ]
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum AppAction {
     Quit,
@@ -41,114 +161,66 @@ enum AppAction {
     OpenSelected,
     DeleteSelectedEntry,
     SearchInput(tui_textarea::Input),
-    TableClick(u16), // New variant for table clicks with row position
+    TableClick(u16),
 }
 
-/// Represents a single record/entry of the UI table.
-///
-/// Additional to the representation ([`Self::row`]) it also contains other meta information to
-/// make e.g. filtering possible and efficient.
 #[derive(Debug, Clone)]
-struct TableRow {
-    id: EntryId,
-    entry: Entry,
+struct PickerRow<T: Pickable> {
+    item: T,
     row: Row<'static>,
     search_score: Option<u32>,
+    original_index: usize,
 }
 
-impl From<(EntryId, Entry)> for TableRow {
-    fn from((id, value): (EntryId, Entry)) -> Self {
-        let cells: Vec<String> = vec![
-            value.workspace_name.to_string(),
-            value
-                .dev_container_name
-                .as_deref()
-                .unwrap_or("")
-                .to_string(),
-            value.workspace_path.to_string_lossy().to_string(),
-            DateTime::<Local>::from(value.last_opened)
-                .format("%Y-%m-%d %H:%M:%S")
-                .to_string(),
-        ];
-        let row = Row::new(cells).height(1);
+#[derive(Debug, Clone)]
+struct PickerData<T: Pickable> {
+    rows: Vec<PickerRow<T>>,
+    max_column_widths: Vec<usize>,
+}
+
+impl<T: Pickable> PickerData<T> {
+    fn from_items(items: Vec<T>) -> Self {
+        let mut rows = Vec::with_capacity(items.len());
+        let mut max_column_widths = vec![0; T::headers().len()];
+
+        for (index, item) in items.into_iter().enumerate() {
+            let cells = item.cells();
+
+            if cells.len() > max_column_widths.len() {
+                max_column_widths.resize(cells.len(), 0);
+            }
+
+            for (column, cell) in cells.iter().enumerate() {
+                max_column_widths[column] = max_column_widths[column].max(cell.len());
+            }
+
+            rows.push(PickerRow {
+                item,
+                row: Row::new(cells).height(1),
+                search_score: Some(0),
+                original_index: index,
+            });
+        }
 
         Self {
-            id,
-            row,
-            entry: value,
-            search_score: Some(0),
+            rows,
+            max_column_widths,
         }
     }
-}
 
-/// Contains all UI related elements to display and operate on the entries of the table.
-#[derive(Debug, Clone)]
-struct TableData {
-    /// Be very careful when accessing this value directly as it represents all values regardless of
-    /// applied filter or not. It only makes sense if the action does not care about the filter and
-    /// if entries are accessed by id and not index/position.
-    ///
-    /// Most of the times [`Self::to_rows`] or [`Self::as_rows_full`] are desired.
-    rows: Vec<TableRow>,
-
-    /// Caches the longest workspace name [`Self::rows`] contains.
-    ///
-    /// Note that this value does not change for a "session" even if a filter is applied and/or the
-    /// longest entry is deleted.
-    max_workspace_name_len: Option<usize>,
-
-    /// Caches the longest devcontainer name [`Self::rows`] contains.
-    ///
-    /// Note that this value does not change for a "session" even if a filter is applied and/or the
-    /// longest entry is deleted.
-    max_devcontainer_name_len: Option<usize>,
-}
-
-impl TableData {
-    pub const HEADER: [&'static str; 4] = ["Workspace", "Dev Container", "Path", "Last Opened"];
-
-    pub fn from_iter<I: Iterator<Item = (EntryId, Entry)>>(iter: I) -> Self {
-        let mut this = Self {
-            rows: iter.into_iter().map(TableRow::from).collect(),
-
-            max_devcontainer_name_len: None,
-            max_workspace_name_len: None,
-        };
-
-        // Sort by `Last Opened` to keep same logic as previous versions
-        // Inverted to have newest at the top with ASC order
-        this.rows
-            .sort_by_key(|entry| -entry.entry.last_opened.timestamp());
-
-        this.max_workspace_name_len = this
-            .rows
-            .iter()
-            .map(|row| row.entry.workspace_name.len())
-            .max();
-
-        this.max_devcontainer_name_len = this
-            .rows
-            .iter()
-            .map(|row| row.entry.dev_container_name.as_deref().unwrap_or("").len())
-            .max();
-
-        this
-    }
-
-    pub fn to_rows(&self) -> Vec<Row<'static>> {
+    fn to_rows(&self) -> Vec<Row<'static>> {
         self.rows
             .iter()
             .filter(|row| row.search_score.is_some())
-            .map(|row| &row.row)
-            .cloned()
+            .map(|row| row.row.clone())
             .collect()
     }
 
-    pub fn as_rows_full(&self) -> impl Iterator<Item = &TableRow> {
+    fn as_rows_full(&self) -> impl Iterator<Item = &PickerRow<T>> {
         self.rows.iter().filter(|row| row.search_score.is_some())
     }
 
-    pub fn apply_filter(&mut self, pattern: &str) -> bool {
+    fn apply_filter(&mut self, pattern: &str) -> bool {
         let mut changes = false;
         let mut matcher = Matcher::default();
         let mut buf = Vec::new();
@@ -161,19 +233,16 @@ impl TableData {
         );
 
         for row in &mut self.rows {
-            let workspace_name = row.entry.workspace_name.as_str();
-            let container_name = row.entry.dev_container_name.as_deref().unwrap_or("");
-            let path_str = row.entry.workspace_path.to_string_lossy();
+            let mut score = None;
+            for field in row.item.search_fields() {
+                score = add_num_opt(
+                    score,
+                    pattern.score(Utf32Str::new(&field, &mut buf), &mut matcher),
+                );
+            }
 
-            let new_search_score = add_num_opt(
-                add_num_opt(
-                    pattern.score(Utf32Str::new(workspace_name, &mut buf), &mut matcher),
-                    pattern.score(Utf32Str::new(container_name, &mut buf), &mut matcher),
-                ),
-                pattern.score(Utf32Str::new(path_str.as_ref(), &mut buf), &mut matcher),
-            );
-            changes |= new_search_score != row.search_score;
-            row.search_score = new_search_score;
+            changes |= score != row.search_score;
+            row.search_score = score;
         }
 
         self.rows
@@ -182,45 +251,48 @@ impl TableData {
         changes
     }
 
-    pub fn reset_filter(&mut self) {
+    fn reset_filter(&mut self) {
         for row in &mut self.rows {
             row.search_score = Some(0);
         }
 
-        // Sort by `Last Opened` to keep same logic as previous versions
-        // Inverted to have newest at the top with ASC order
-        self.rows
-            .sort_by_key(|entry| -entry.entry.last_opened.timestamp());
+        self.rows.sort_by_key(|row| row.original_index);
+    }
+
+    fn delete_by_original_index(&mut self, original_index: usize) -> bool {
+        if let Some(index) = self
+            .rows
+            .iter()
+            .position(|entry| entry.original_index == original_index)
+        {
+            self.rows.remove(index);
+            return true;
+        }
+
+        false
     }
 }
 
-/// The UI state
-struct UI<'a> {
+struct PickerState<'a, T: Pickable> {
     search: TextArea<'a>,
     table_state: TableState,
-    table_data: TableData,
-    hide_instructions: bool,
-    hide_info: bool,
-    last_clicked_index: Option<usize>, // Track the last clicked row
+    table_data: PickerData<T>,
+    opts: PickerOpts,
+    last_clicked_index: Option<usize>,
 }
 
-impl<'a> UI<'a> {
-    /// Create new empty state from history tracker reference
-    pub fn new(history: &History, hide_instructions: bool, hide_info: bool) -> UI<'a> {
-        UI {
+impl<T: Pickable> PickerState<'_, T> {
+    fn new(items: Vec<T>, opts: PickerOpts) -> Self {
+        Self {
             search: TextArea::default(),
             table_state: TableState::default(),
-            table_data: TableData::from_iter(
-                history.iter().map(|(id, entry)| (*id, entry.clone())),
-            ),
-            hide_instructions,
-            hide_info,
+            table_data: PickerData::from_items(items),
+            opts,
             last_clicked_index: None,
         }
     }
 
-    /// Select the next entry with wrapping
-    pub fn select_next(&mut self) {
+    fn select_next(&mut self) {
         let len = self.table_data.as_rows_full().count();
         if len == 0 {
             return;
@@ -230,8 +302,7 @@ impl<'a> UI<'a> {
         self.table_state.select(Some((i + 1) % len));
     }
 
-    /// Select the previous entry with wrapping
-    pub fn select_previous(&mut self) {
+    fn select_previous(&mut self) {
         let len = self.table_data.as_rows_full().count();
         if len == 0 {
             return;
@@ -241,21 +312,21 @@ impl<'a> UI<'a> {
         self.table_state.select(Some((i + len - 1) % len));
     }
 
-    pub fn select_first(&mut self) {
+    fn select_first(&mut self) {
         self.table_state.select_first();
     }
 
-    pub fn select_last(&mut self) {
+    fn select_last(&mut self) {
         self.table_state.select_last();
     }
 
-    pub fn apply_filter(&mut self, pattern: Option<&str>) {
+    fn apply_filter(&mut self, pattern: Option<&str>) {
         let pattern = pattern.unwrap_or("");
 
-        let prev_selected = self.get_selected_row();
+        let prev_selected = self.get_selected_row().map(|row| row.original_index);
 
         let update_selected = if pattern.trim().is_empty() {
-            self.reset_filter();
+            self.table_data.reset_filter();
             true
         } else {
             self.table_data.apply_filter(pattern)
@@ -265,16 +336,14 @@ impl<'a> UI<'a> {
             return;
         }
 
-        // See if selected item is still visible. If not select first, else reselect (index changed)
         if let Some(selected) = prev_selected {
             let new_rows = self.table_data.as_rows_full();
 
             match new_rows
                 .enumerate()
-                .find_map(|(index, entry)| (entry.id == selected.id).then_some(index))
+                .find_map(|(index, entry)| (entry.original_index == selected).then_some(index))
             {
                 Some(index) => {
-                    // Update index
                     self.table_state.select(Some(index));
                 }
                 _ => {
@@ -286,53 +355,28 @@ impl<'a> UI<'a> {
         }
     }
 
-    pub fn reset_filter(&mut self) {
-        self.table_data.reset_filter();
-    }
-
-    fn get_selected_row(&self) -> Option<TableRow> {
+    fn get_selected_row(&self) -> Option<PickerRow<T>> {
         let index = self.table_state.selected()?;
         self.table_data.as_rows_full().nth(index).cloned()
     }
 
-    fn delete(&mut self, entry_id: EntryId) -> bool {
-        if let Some(index) = self
-            .table_data
-            .rows
-            .iter()
-            .position(|entry| entry.id == entry_id)
-        {
-            self.table_data.rows.remove(index);
-            return true;
-        }
-
-        false
-    }
-
-    fn reset_selected(&mut self) {
-        self.table_state.select(Some(0));
-    }
-
-    /// Replaces the previous [`Self::table_data`] with a newly calculated one.
-    ///
-    /// This should only be done if there is a "desync" issue (e.g. deleted from history but failed
-    /// to delete from table data).
-    fn resync_table(&mut self, history: &History) {
-        self.table_data =
-            TableData::from_iter(history.iter().map(|(id, entry)| (*id, entry.clone())));
-        self.reset_selected();
+    fn delete(&mut self, original_index: usize) -> bool {
+        self.table_data.delete_by_original_index(original_index)
     }
 }
 
-/// Starts the UI and returns the selected/resulting entry
-pub(crate) fn start(
-    tracker: &mut Tracker,
-    hide_instructions: bool,
-    hide_info: bool,
-) -> Result<Option<(EntryId, Entry)>> {
+/// Starts a generic picker and returns the selected item.
+///
+/// # Errors
+///
+/// Returns an error if terminal setup/teardown fails or if input/rendering fails.
+pub fn pick<T: Pickable>(
+    items: Vec<T>,
+    opts: PickerOpts,
+    on_delete: Option<&mut dyn FnMut(&T)>,
+) -> Result<Option<T>> {
     debug!("Starting UI...");
 
-    // setup terminal
     debug!("Entering raw mode & alternate screen...");
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -341,14 +385,8 @@ pub(crate) fn start(
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // create app and run it
-    let res = run_app(
-        &mut terminal,
-        UI::new(&tracker.history, hide_instructions, hide_info),
-        tracker,
-    );
+    let res = run_app(&mut terminal, PickerState::new(items, opts), on_delete);
 
-    // restore terminal
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
@@ -358,22 +396,53 @@ pub(crate) fn start(
     terminal.show_cursor()?;
     debug!("Terminal restored");
 
-    Ok(res?.and_then(|selected_id| {
-        tracker
-            .history
-            .iter()
-            .find(|(id, _)| **id == selected_id)
-            .map(|(id, entry)| (*id, entry.clone()))
-    }))
+    Ok(res?)
 }
 
-/// UI main loop
-fn run_app<B: Backend>(
-    terminal: &mut Terminal<B>,
-    mut app: UI,
+/// Starts the history UI and returns the selected history entry.
+///
+/// # Errors
+///
+/// Returns an error if terminal setup/teardown fails or if input/rendering fails.
+pub fn start(
     tracker: &mut Tracker,
-) -> io::Result<Option<EntryId>> {
-    app.table_state.select(Some(0)); // Select the most recent element by default
+    hide_instructions: bool,
+    hide_info: bool,
+) -> Result<Option<(EntryId, Entry)>> {
+    let items = sorted_history_items(&tracker.history);
+    let opts = PickerOpts {
+        hide_instructions,
+        hide_info,
+    };
+
+    let mut on_delete = |item: &HistoryItem| {
+        let _ = tracker.history.delete(item.id);
+    };
+
+    let selected = pick(items, opts, Some(&mut on_delete))?;
+    Ok(selected.map(|item| (item.id, item.entry)))
+}
+
+fn sorted_history_items(history: &History) -> Vec<HistoryItem> {
+    let mut items: Vec<HistoryItem> = history
+        .iter()
+        .map(|(id, entry)| HistoryItem {
+            id: *id,
+            entry: entry.clone(),
+        })
+        .collect();
+
+    items.sort_by_key(|item| -item.entry.last_opened.timestamp());
+    items
+}
+
+fn run_app<B: Backend, T: Pickable>(
+    terminal: &mut Terminal<B>,
+    mut app: PickerState<'_, T>,
+    on_delete: Option<&mut dyn FnMut(&T)>,
+) -> io::Result<Option<T>> {
+    app.table_state.select(Some(0));
+    let mut on_delete = on_delete;
 
     loop {
         terminal.draw(|f| render(f, &mut app))?;
@@ -386,52 +455,48 @@ fn run_app<B: Backend>(
                 AppAction::Quit => return Ok(None),
                 AppAction::SelectNext => {
                     app.select_next();
-                    app.last_clicked_index = None; // Reset click tracking on navigation
+                    app.last_clicked_index = None;
                 }
                 AppAction::SelectPrevious => {
                     app.select_previous();
-                    app.last_clicked_index = None; // Reset click tracking on navigation
+                    app.last_clicked_index = None;
                 }
                 AppAction::SelectFirst => {
                     app.select_first();
-                    app.last_clicked_index = None; // Reset click tracking on navigation
+                    app.last_clicked_index = None;
                 }
                 AppAction::SelectLast => {
                     app.select_last();
-                    app.last_clicked_index = None; // Reset click tracking on navigation
+                    app.last_clicked_index = None;
                 }
                 AppAction::OpenSelected => {
                     if let Some(selected) = app.get_selected_row() {
-                        return Ok(Some(selected.id));
+                        return Ok(Some(selected.item));
                     }
                 }
                 AppAction::DeleteSelectedEntry => {
-                    if let Some(selected) = app.get_selected_row() {
-                        let entry_id = selected.id;
-                        if tracker.history.delete(entry_id).is_some() && !app.delete(entry_id) {
-                            app.resync_table(&tracker.history);
-                        }
+                    if let Some(selected) = app.get_selected_row()
+                        && let Some(callback) = on_delete.as_deref_mut()
+                    {
+                        callback(&selected.item);
+                        let _ = app.delete(selected.original_index);
                     }
-                    app.last_clicked_index = None; // Reset click tracking after deletion
+                    app.last_clicked_index = None;
                 }
                 AppAction::TableClick(row) => {
-                    // Check if click is within table area (accounting for borders and header)
                     let table_area = terminal.get_frame().area();
                     if row >= table_area.y + 2 && row < table_area.y + table_area.height - 1 {
-                        let clicked_index = (row - table_area.y - 2) as usize;
+                        let clicked_index = usize::from(row - table_area.y - 2);
                         let visible_rows = app.table_data.as_rows_full().count();
 
                         if clicked_index < visible_rows {
-                            // If clicking the same row that was previously clicked and selected
                             if app.last_clicked_index == Some(clicked_index)
                                 && app.table_state.selected() == Some(clicked_index)
                             {
-                                // Launch the container
                                 if let Some(selected) = app.get_selected_row() {
-                                    return Ok(Some(selected.id));
+                                    return Ok(Some(selected.item));
                                 }
                             } else {
-                                // Just select the row on first click
                                 app.table_state.select(Some(clicked_index));
                                 app.last_clicked_index = Some(clicked_index);
                             }
@@ -442,7 +507,7 @@ fn run_app<B: Backend>(
                     if app.search.input(input) {
                         let line = app.search.lines().first().cloned();
                         app.apply_filter(line.as_deref());
-                        app.last_clicked_index = None; // Reset click tracking on search
+                        app.last_clicked_index = None;
                     }
                 }
             }
@@ -478,7 +543,6 @@ fn handle_input(input: &Event) -> Option<AppAction> {
                 return Some(AppAction::DeleteSelectedEntry);
             }
 
-            // For other key events (typing), pass to search input
             return Some(AppAction::SearchInput((*key).into()));
         }
         Event::Mouse(MouseEvent { kind, row, .. }) => match kind {
@@ -499,67 +563,42 @@ fn handle_input(input: &Event) -> Option<AppAction> {
     None
 }
 
-/// Main render function
-fn render(frame: &mut Frame, app: &mut UI) {
-    // Setup crossterm UI layout & style
-    let constraints = if app.hide_info {
-        vec![
-            Constraint::Percentage(100),
-            Constraint::Min(3),
-            Constraint::Min(1),
-        ]
+fn render<T: Pickable>(frame: &mut Frame, app: &mut PickerState<'_, T>) {
+    let selected = app.get_selected_row();
+    let status_lines = if app.opts.hide_info {
+        Vec::new()
     } else {
-        vec![
-            Constraint::Percentage(100),
-            Constraint::Min(3),
-            Constraint::Min(1),
-            Constraint::Min(1),
-            Constraint::Min(1),
-        ]
+        selected
+            .as_ref()
+            .map_or_else(Vec::new, |row| row.item.status_lines())
     };
+
+    let mut constraints = vec![
+        Constraint::Percentage(100),
+        Constraint::Min(3),
+        Constraint::Min(1),
+    ];
+    if !app.opts.hide_info {
+        constraints.extend((0..status_lines.len()).map(|_| Constraint::Min(1)));
+    }
 
     let area = Layout::default()
         .constraints(&constraints)
         .horizontal_margin(1)
         .split(frame.area());
 
-    // Calculate the longest workspace and dev container names
-    let longest_ws_name = app
-        .table_data
-        .max_workspace_name_len
-        .unwrap_or(20)
-        .clamp(9, 60);
-
-    let longest_dc_name = app
-        .table_data
-        .max_devcontainer_name_len
-        .unwrap_or(20)
-        .clamp(9, 60);
-
-    // Render the main table
-    render_table(
-        frame,
-        app,
-        area[0],
-        u16::try_from(longest_ws_name).unwrap_or(u16::MAX),
-        u16::try_from(longest_dc_name).unwrap_or(u16::MAX),
-    );
-
+    render_table(frame, app, area[0]);
     render_search_input(frame, app, area[1]);
-
-    let selected: Option<Entry> = app.get_selected_row().map(|row| row.entry);
-
-    // Render status area and additional info
     render_status_area(
         frame,
-        selected.as_ref(),
+        &status_lines,
         &area[2..],
-        app.hide_instructions,
-        app.hide_info,
+        app.opts.hide_instructions,
+        app.opts.hide_info,
     );
 }
 
-fn render_search_input(frame: &mut Frame, app: &mut UI, area: Rect) {
+fn render_search_input<T: Pickable>(frame: &mut Frame, app: &mut PickerState<'_, T>, area: Rect) {
     let style = Style::default().fg(Color::Blue);
 
     app.search.set_block(
@@ -572,62 +611,42 @@ fn render_search_input(frame: &mut Frame, app: &mut UI, area: Rect) {
     frame.render_widget(&app.search, area);
 }
 
-/// Renders the main table
-fn render_table(
-    frame: &mut Frame,
-    app: &mut UI,
-    area: Rect,
-    longest_ws_name: u16,
-    longest_dc_name: u16,
-) {
+fn render_table<T: Pickable>(frame: &mut Frame, app: &mut PickerState<'_, T>, area: Rect) {
     let (header_style, selected_style) = (
         Style::default().bg(Color::Blue),
         Style::default().bg(Color::DarkGray),
     );
 
-    let header_cells = TableData::HEADER
+    let header_cells = T::headers()
         .iter()
         .map(|header| Cell::from(*header).style(Style::default().fg(Color::White)));
     let header = Row::new(header_cells).style(header_style).height(1);
 
-    let widths = [
-        Constraint::Min(longest_ws_name + 1),
-        Constraint::Min(longest_dc_name + 1),
-        Constraint::Percentage(70),
-        Constraint::Min(20),
-    ];
+    let widths = T::column_constraints(&app.table_data.max_column_widths);
 
     let table = Table::new(app.table_data.to_rows(), widths)
         .header(header)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Recent Workspaces"),
-        )
+        .block(Block::default().borders(Borders::ALL).title(T::title()))
         .row_highlight_style(selected_style)
         .highlight_symbol("> ");
     frame.render_stateful_widget(table, area, &mut app.table_state);
 
-    // Calculate if scrollbar is needed
     let total_items = app.table_data.as_rows_full().count();
-    let viewport_height = (area.height - 2) as usize; // Subtract 2 for borders
+    let viewport_height = usize::from(area.height - 2);
 
-    // Show scrollbar if there's any content not visible in the viewport
     if total_items >= viewport_height {
         let mut scrollbar_state = ScrollbarState::default()
             .content_length(total_items)
             .viewport_content_length(viewport_height)
             .position(app.table_state.selected().unwrap_or(0));
 
-        // Create a new area for the scrollbar that overlaps with the right border
         let scrollbar_area = Rect {
-            x: area.x + area.width - 1, // Place on the right border
-            y: area.y + 2,              // Start two lines below the top (one line after header)
+            x: area.x + area.width - 1,
+            y: area.y + 2,
             width: 1,
-            height: area.height - 3, // Account for top border + header and bottom border
+            height: area.height - 3,
         };
 
-        // Render scrollbar
         frame.render_stateful_widget(
             Scrollbar::new(ScrollbarOrientation::VerticalRight)
                 .begin_symbol(Some("↑"))
@@ -638,15 +657,13 @@ fn render_table(
     }
 }
 
-/// Renders the status area and additional info
 fn render_status_area(
     frame: &mut Frame,
-    selected: Option<&Entry>,
+    status_lines: &[String],
     areas: &[Rect],
     hide_instructions: bool,
     hide_info: bool,
 ) {
-    // Render instructions using full width if not hidden
     if !hide_instructions {
         let instruction = Span::styled(
             "↑/↓ to navigate • Del/Ctrl+X to remove • Enter to open • Type to filter • Esc/Ctrl+C to quit",
@@ -658,67 +675,170 @@ fn render_status_area(
         frame.render_widget(instructions_par, areas[0]);
     }
 
-    // Render additional info if not hidden and we have more areas
     if !hide_info && areas.len() > 1 {
-        // Strategy, command and args info
-        let strategy = selected.map_or_else(
-            || String::from("-"),
-            |entry| entry.behavior.strategy.to_string(),
-        );
-
-        let command =
-            selected.map_or_else(|| String::from("-"), |entry| entry.behavior.command.clone());
-
-        let args_count = selected.map_or(0, |entry| entry.behavior.args.len());
-        let args = selected.map_or_else(
-            || String::from("-"),
-            |entry| {
-                let converted_str: Vec<Cow<'_, str>> = entry
-                    .behavior
-                    .args
-                    .iter()
-                    .map(|arg| arg.to_string_lossy())
-                    .collect();
-                converted_str.join(", ")
-            },
-        );
-
-        let additional_info = Span::styled(
-            format!("Strategy: {strategy} • Command: {command} • Args ({args_count}): {args}"),
-            Style::default().fg(Color::DarkGray),
-        );
-
-        let status_block = Block::default().padding(Padding::new(2, 2, 0, 0));
-        let additional_info_par = Paragraph::new(additional_info)
-            .block(status_block)
-            .alignment(Alignment::Left);
-        frame.render_widget(additional_info_par, areas[1]);
-
-        // Dev container path
-        if areas.len() > 2 {
-            let dc_path = selected.map_or_else(String::new, |entry| {
-                entry
-                    .config_path
-                    .as_ref()
-                    .map(|f| f.to_string_lossy().into_owned())
-                    .unwrap_or_default()
-            });
-            let dc_path_info = Span::styled(
-                format!("Dev Container: {dc_path}"),
-                Style::default().fg(Color::DarkGray),
-            );
-            let dc_path_info_par = Paragraph::new(dc_path_info)
-                .block(Block::default().padding(Padding::new(2, 2, 0, 0)))
-                .alignment(Alignment::Left);
-
-            frame.render_widget(dc_path_info_par, areas[2]);
+        for (index, line) in status_lines.iter().enumerate() {
+            if let Some(area) = areas.get(index + 1) {
+                let info = Span::styled(line.clone(), Style::default().fg(Color::DarkGray));
+                let paragraph = Paragraph::new(info)
+                    .block(Block::default().padding(Padding::new(2, 2, 0, 0)))
+                    .alignment(Alignment::Left);
+                frame.render_widget(paragraph, *area);
+            }
         }
     }
 }
 
-/// Adds two optional [`u32`]s.
-///
-/// If at least one of the inputs is [`Option::Some`] then the result will also be [`Option::Some`].
+/// Picker item wrapping a Docker devcontainer.
+#[derive(Clone, Debug)]
+pub struct ContainerItem(pub crate::container::Container);
+
+impl Pickable for ContainerItem {
+    fn title() -> &'static str {
+        "Devcontainers"
+    }
+    fn headers() -> &'static [&'static str] {
+        &["Container ID", "Status", "Image", "Project Path"]
+    }
+    fn cells(&self) -> Vec<String> {
+        vec![
+            self.0.short_id.clone(),
+            self.0.status.clone(),
+            self.0.image.clone(),
+            self.0.local_folder.clone(),
+        ]
+    }
+    fn search_fields(&self) -> Vec<String> {
+        vec![
+            self.0.short_id.clone(),
+            self.0.status.clone(),
+            self.0.image.clone(),
+            self.0.local_folder.clone(),
+            self.0.config_file.clone(),
+        ]
+    }
+    fn status_lines(&self) -> Vec<String> {
+        vec![format!("Config: {}", self.0.config_file)]
+    }
+    fn column_constraints(max_widths: &[usize]) -> Vec<Constraint> {
+        let status_w = max_widths.get(1).copied().unwrap_or(6).clamp(6, 30);
+        vec![
+            Constraint::Min(13),
+            Constraint::Min(u16::try_from(status_w).unwrap_or(6)),
+            Constraint::Percentage(40),
+            Constraint::Percentage(60),
+        ]
+    }
+}
+
+/// Launches a picker for Docker devcontainers.
+pub fn pick_container(
+    containers: Vec<crate::container::Container>,
+    opts: PickerOpts,
+    on_delete: Option<&mut dyn FnMut(&ContainerItem)>,
+) -> Result<Option<crate::container::Container>> {
+    let items: Vec<ContainerItem> = containers.into_iter().map(ContainerItem).collect();
+    let selected = pick(items, opts, on_delete)?;
+    Ok(selected.map(|item| item.0))
+}
+
+/// Picker item wrapping a stored devcontainer config.
+#[derive(Clone, Debug)]
+pub struct ConfigItem(pub crate::config_store::ConfigEntry);
+
+impl Pickable for ConfigItem {
+    fn title() -> &'static str {
+        "Configs"
+    }
+    fn headers() -> &'static [&'static str] {
+        &["Name", "Description", "Path"]
+    }
+    fn cells(&self) -> Vec<String> {
+        vec![
+            self.0.name.clone(),
+            self.0.description.as_deref().unwrap_or("").to_string(),
+            self.0.root.display().to_string(),
+        ]
+    }
+    fn search_fields(&self) -> Vec<String> {
+        vec![
+            self.0.name.clone(),
+            self.0.description.clone().unwrap_or_default(),
+            self.0.root.to_string_lossy().to_string(),
+        ]
+    }
+    fn status_lines(&self) -> Vec<String> {
+        vec![]
+    }
+    fn column_constraints(max_widths: &[usize]) -> Vec<Constraint> {
+        let name_w = max_widths.first().copied().unwrap_or(4).clamp(4, 30);
+        let desc_w = max_widths.get(1).copied().unwrap_or(4).clamp(4, 40);
+        vec![
+            Constraint::Min(u16::try_from(name_w).unwrap_or(4)),
+            Constraint::Min(u16::try_from(desc_w).unwrap_or(4)),
+            Constraint::Percentage(70),
+        ]
+    }
+}
+
+/// Launches a picker for stored devcontainer configs.
+pub fn pick_config(
+    configs: Vec<crate::config_store::ConfigEntry>,
+    opts: PickerOpts,
+    on_delete: Option<&mut dyn FnMut(&ConfigItem)>,
+) -> Result<Option<crate::config_store::ConfigEntry>> {
+    let items: Vec<ConfigItem> = configs.into_iter().map(ConfigItem).collect();
+    let selected = pick(items, opts, on_delete)?;
+    Ok(selected.map(|item| item.0))
+}
+
+/// Picker item for selecting among multiple devcontainer configs in a project.
+#[derive(Clone, Debug)]
+pub struct DevContainerItem(pub crate::workspace::DevContainer);
+
+impl Pickable for DevContainerItem {
+    fn title() -> &'static str {
+        "Select Dev Container"
+    }
+    fn headers() -> &'static [&'static str] {
+        &["Name", "Config Path"]
+    }
+    fn cells(&self) -> Vec<String> {
+        vec![
+            self.0.name.as_deref().unwrap_or("(unnamed)").to_string(),
+            self.0.config_path.display().to_string(),
+        ]
+    }
+    fn search_fields(&self) -> Vec<String> {
+        vec![
+            self.0.name.clone().unwrap_or_default(),
+            self.0.config_path.to_string_lossy().to_string(),
+        ]
+    }
+    fn status_lines(&self) -> Vec<String> {
+        vec![format!("Workspace: {}", self.0.workspace_path_in_container)]
+    }
+    fn column_constraints(max_widths: &[usize]) -> Vec<Constraint> {
+        let name_w = max_widths.first().copied().unwrap_or(9).clamp(9, 40);
+        vec![
+            Constraint::Min(u16::try_from(name_w).unwrap_or(9)),
+            Constraint::Percentage(80),
+        ]
+    }
+}
+
+/// Launches a picker for devcontainer selection.
+pub fn pick_devcontainer(
+    dev_containers: Vec<crate::workspace::DevContainer>,
+) -> Result<Option<crate::workspace::DevContainer>> {
+    let items: Vec<DevContainerItem> = dev_containers.into_iter().map(DevContainerItem).collect();
+    let opts = PickerOpts {
+        hide_instructions: false,
+        hide_info: false,
+    };
+    let selected = pick(items, opts, None)?;
+    Ok(selected.map(|item| item.0))
+}
+
 fn add_num_opt(o1: Option<u32>, o2: Option<u32>) -> Option<u32> {
     match (o1, o2) {
         (Some(n1), Some(n2)) => Some(n1 + n2),
