@@ -1,4 +1,9 @@
-use std::{ffi::OsString, fmt::Display, path::PathBuf, str::FromStr};
+use std::{
+    ffi::OsString,
+    fmt::Display,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use clap::ValueEnum;
 use color_eyre::eyre::{self, Result, bail, eyre};
@@ -138,7 +143,11 @@ impl Setup {
 
     /// Launches vscode with the given configuration.
     /// Returns the dev container that was used, if any.
-    pub fn launch(self, config: Option<PathBuf>) -> Result<Option<DevContainer>> {
+    pub fn launch(
+        self,
+        config: Option<PathBuf>,
+        subfolder: Option<&Path>,
+    ) -> Result<Option<DevContainer>> {
         let editor_name = format_editor_name(&self.behavior.command);
 
         match self.behavior.strategy {
@@ -152,6 +161,7 @@ impl Setup {
                         self.dry_run,
                         dev_container,
                         &self.behavior.command,
+                        subfolder,
                     )?;
                 } else {
                     info!("No dev container found, opening on host system with {editor_name}...");
@@ -173,6 +183,7 @@ impl Setup {
                         self.dry_run,
                         dev_container,
                         &self.behavior.command,
+                        subfolder,
                     )?;
                 } else {
                     bail!(
