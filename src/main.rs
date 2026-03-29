@@ -100,6 +100,21 @@ fn resolve_strategy_for_remote(
     }
 }
 
+fn normalize_recent_strategy_for_remote(
+    remote_host: Option<&str>,
+    cli_strategy: Option<ContainerStrategy>,
+    stored_strategy: ContainerStrategy,
+) -> Result<ContainerStrategy> {
+    if remote_host.is_none() {
+        return Ok(cli_strategy.unwrap_or(stored_strategy));
+    }
+
+    match cli_strategy {
+        Some(strategy) => resolve_strategy_for_remote(remote_host, Some(strategy)),
+        None => Ok(ContainerStrategy::ForceClassic),
+    }
+}
+
 fn ensure_remote_has_no_config(remote_host: Option<&str>, config: Option<&Path>) -> Result<()> {
     if remote_host.is_some() && config.is_some() {
         bail!(
@@ -182,15 +197,16 @@ fn reopen_recent(
         if let Some(cmd) = launch.command {
             entry.behavior.command = cmd;
         }
-        if let Some(beh) = launch.behavior {
-            entry.behavior.strategy = beh;
-        }
+        let cli_strategy = launch.behavior;
         if !launch.args.is_empty() {
             entry.behavior.args = launch.args;
         }
 
-        entry.behavior.strategy =
-            resolve_strategy_for_remote(remote_host.as_deref(), Some(entry.behavior.strategy))?;
+        entry.behavior.strategy = normalize_recent_strategy_for_remote(
+            remote_host.as_deref(),
+            cli_strategy,
+            entry.behavior.strategy,
+        )?;
 
         let resolved_config = if launch.config.is_some() {
             resolve_launch_config(launch.config.as_ref(), config_store)?
@@ -308,7 +324,10 @@ fn log_format(
 
 #[cfg(test)]
 mod tests {
-    use super::{resolve_strategy_for_remote, workspace_root_from_config};
+    use super::{
+        normalize_recent_strategy_for_remote, resolve_strategy_for_remote,
+        workspace_root_from_config,
+    };
     use crate::launch::ContainerStrategy;
     use std::path::{Path, PathBuf};
 
@@ -383,5 +402,16 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.to_string().contains("not supported with --remote-host"));
+    }
+
+    #[test]
+    fn recent_remote_reopen_coerces_stored_detect_to_force_classic() {
+        let strategy = normalize_recent_strategy_for_remote(
+            Some("remote-test"),
+            None,
+            ContainerStrategy::Detect,
+        )
+        .unwrap();
+        assert_eq!(strategy, ContainerStrategy::ForceClassic);
     }
 }
