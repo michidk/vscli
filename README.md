@@ -142,6 +142,7 @@ Both the `open` and `recent` commands share the same set of launch arguments:
 - `--command`: Specify which editor command to use (e.g., "code", "code-insiders", "cursor")
 - `--behavior`: Set the launch behavior ("detect", "force-container", "force-classic")
 - `--config`: Override the path to the dev container config file, or pass a config name to resolve from the config directory
+- `--remote-host`: Open the given path on a remote SSH host alias configured for VS Code Remote SSH
 - Additional arguments can be passed to the editor executable by specifying them after `--`
 
 The `recent` command additionally supports:
@@ -245,6 +246,8 @@ vscli open /path/to/project         # open vscode in the specified directory
 
 The default behavior tries to detect whether the project is a [dev container](https://containers.dev/) project. If it is, it will launch the dev container instead - if not it will launch vscode normally.
 
+These behaviors apply to local workspaces. Remote SSH workspaces always open as remote folders; `--behavior detect` and `--behavior force-container` are not supported with `--remote-host`.
+
 You can change the launch behavior using the `--behavior` flag:
 
 ```sh
@@ -261,6 +264,7 @@ You can specify which editor command to use with the `--command` flag:
 vscli open --command cursor .        # open using cursor editor
 vscli open --command code .          # open using vscode (default)
 vscli open --command code-insiders . # open using vscode insiders
+vscli open --remote-host my-ec2 /home/ec2-user/app  # open a remote folder over SSH
 ```
 
 Additional arguments can be passed to the editor executable, by specifying them after `--`:
@@ -281,6 +285,7 @@ vscli recent --command cursor                   # open the selected project with
 vscli recent --behavior force-container         # force open the selected project in a dev container
 vscli recent --command cursor --behavior detect # open with cursor and detect if dev container should be used
 vscli recent --config .devcontainer/custom.json # open with a specific dev container config
+vscli recent --remote-host my-ec2               # reopen the selected project on a remembered remote host
 vscli recent -- --disable-gpu                   # pass additional arguments to the editor
 vscli recent --hide-instructions                # hide the keybinding instructions from the UI
 vscli recent --hide-info                        # hide additional information like strategy, command, args and dev container path
@@ -306,11 +311,25 @@ vscli config copy rust-dev                        # copy into the current direct
 vscli config copy rust-dev ~/projects/my-app     # copy into another project directory
 ```
 
+#### Remote SSH Hosts
+
+If you already use VS Code Remote SSH, you can point `vscli` at a remote host alias and remote path:
+
+```sh
+vscli open --remote-host my-ec2 /home/ec2-user/app
+vscli recent --remote-host my-ec2
+```
+
+This opens the workspace using a `vscode-remote://ssh-remote+...` folder URI and stores the remote host in `recent` history so you can reopen it from the UI later.
+
+`vscli` does not manage dev containers on remote SSH hosts. Remote workspaces are opened as SSH folders; if the remote folder contains a `.devcontainer` setup, VS Code Dev Containers may offer to reopen it in a container afterward.
+
 #### Environment Variables
 
 | Variable | Description |
 | --- | --- |
 | `VSCLI_CONFIG_DIR` | Override the config directory (default: `~/.local/share/vscli/configs`) |
 | `VSCLI_EDITOR` | Editor command for `config ui` and `container ui` (default: `code`) |
+| `VSCLI_REMOTE_HOST` | Default remote SSH host alias for `open` and `recent` |
 | `HISTORY_PATH` | Override the history file path |
 | `DRY_RUN` | Enable dry-run mode |
