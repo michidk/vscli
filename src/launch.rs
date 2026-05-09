@@ -150,6 +150,17 @@ impl Setup {
     ) -> Result<Option<DevContainer>> {
         let editor_name = format_editor_name(&self.behavior.command);
 
+        if self.workspace.remote_host.is_some() {
+            info!("Opening remote workspace over SSH with {editor_name}...");
+
+            self.workspace.open_classic(
+                self.behavior.args,
+                self.dry_run,
+                &self.behavior.command,
+            )?;
+            return Ok(None);
+        }
+
         match self.behavior.strategy {
             ContainerStrategy::Detect => {
                 let dev_container = self.detect(config)?;

@@ -50,6 +50,10 @@ pub(crate) struct LaunchArgs {
     #[arg(long, env)]
     pub config: Option<PathBuf>,
 
+    /// Open the workspace on a remote SSH host.
+    #[arg(long, env = "VSCLI_REMOTE_HOST")]
+    pub remote_host: Option<String>,
+
     /// Additional arguments to pass to the editor
     #[arg(value_parser, env)]
     pub args: Vec<OsString>,

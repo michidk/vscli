@@ -87,6 +87,8 @@ pub struct Workspace {
     pub path: PathBuf,
     /// The name of the workspace.
     pub name: String,
+    /// The remote SSH host alias, if this workspace is remote.
+    pub remote_host: Option<String>,
 }
 
 impl Workspace {
@@ -104,16 +106,29 @@ impl Workspace {
         trace!("Canonicalized path: {path_log}");
 
         // get workspace name (either directory or file name)
-        let workspace_name = path
-            .file_name()
-            .ok_or_else(|| eyre!("Error getting workspace from path"))?
-            .to_string_lossy()
-            .into_owned();
+        let workspace_name = workspace_name(&path)?;
         trace!("Workspace name: {workspace_name}");
 
         let ws = Workspace {
             path,
             name: workspace_name,
+            remote_host: None,
+        };
+        trace!("{ws:?}");
+        Ok(ws)
+    }
+
+    /// Creates a new remote `Workspace` from the given absolute path and SSH host alias.
+    pub fn from_remote_path(path: &Path, remote_host: String) -> Result<Workspace> {
+        if !path.is_absolute() {
+            bail!("Remote path must be absolute: {}", path.display());
+        }
+
+        let workspace_name = workspace_name(path)?;
+        let ws = Workspace {
+            path: path.to_path_buf(),
+            name: workspace_name,
+            remote_host: Some(remote_host),
         };
         trace!("{ws:?}");
         Ok(ws)
@@ -183,6 +198,14 @@ impl Workspace {
     ) -> Result<()> {
         if args.iter().any(|arg| arg == "--folder-uri") {
             bail!("Specifying `--folder-uri` is not possible while using vscli.");
+        }
+
+        if self.remote_host.is_some() {
+            let uri = self.remote_folder_uri(subfolder);
+            args.push(OsString::from("--folder-uri"));
+            args.push(OsString::from(uri));
+            return exec_code(args, dry_run, command)
+                .wrap_err_with(|| "Error opening vscode using remote SSH...");
         }
 
         let mut container_folder: String = dev_container.workspace_path_in_container.clone();
@@ -276,10 +299,63 @@ impl Workspace {
         trace!("path: {}", self.path.display());
         trace!("args: {args:?}");
 
+        if args.iter().any(|arg| arg == "--folder-uri") {
+            bail!("Specifying `--folder-uri` is not possible while using vscli.");
+        }
+
+        if self.remote_host.is_some() {
+            let uri = self.remote_folder_uri(None);
+            args.push(OsString::from("--folder-uri"));
+            args.push(OsString::from(uri));
+            return exec_code(args, dry_run, command)
+                .wrap_err_with(|| "Error opening vscode using remote SSH...");
+        }
+
         args.insert(0, self.path.as_os_str().to_owned());
         exec_code(args, dry_run, command)
             .wrap_err_with(|| "Error opening vscode the classic way...")
     }
+
+    fn remote_folder_uri(&self, subfolder: Option<&Path>) -> String {
+        let host = self
+            .remote_host
+            .as_deref()
+            .expect("remote folder URI requires remote host");
+        let remote_path = remote_workspace_path(&self.path, subfolder);
+        format!("vscode-remote://ssh-remote+{host}{remote_path}")
+    }
+}
+
+fn workspace_name(path: &Path) -> Result<String> {
+    if let Some(name) = path.file_name() {
+        return Ok(name.to_string_lossy().into_owned());
+    }
+
+    let display = path.display().to_string();
+    if display.is_empty() {
+        Err(eyre!("Error getting workspace from path"))
+    } else {
+        Ok(display)
+    }
+}
+
+fn remote_workspace_path(path: &Path, subfolder: Option<&Path>) -> String {
+    let mut remote_path = path.to_string_lossy().replace('\\', "/");
+    if !remote_path.starts_with('/') {
+        remote_path.insert(0, '/');
+    }
+
+    if let Some(subfolder) = subfolder {
+        let subfolder = subfolder.to_string_lossy().replace('\\', "/");
+        if !subfolder.is_empty() && subfolder != "." {
+            if !remote_path.ends_with('/') {
+                remote_path.push('/');
+            }
+            remote_path.push_str(subfolder.trim_start_matches('/'));
+        }
+    }
+
+    remote_path
 }
 
 /// Executes the vscode executable with the given arguments on Unix.
@@ -381,5 +457,36 @@ mod tests {
         let folder = "/custom/path";
         let result = DevContainer::substitute_variables(folder, "my-project");
         assert_eq!(result, "/custom/path");
+    }
+
+    #[test]
+    fn test_remote_workspace_path_appends_subfolder() {
+        let path = remote_workspace_path(
+            Path::new("/home/dev/workspace"),
+            Some(Path::new("apps/api")),
+        );
+        assert_eq!(path, "/home/dev/workspace/apps/api");
+    }
+
+    #[test]
+    fn test_remote_workspace_path_normalizes_windows_separators() {
+        let path = remote_workspace_path(
+            Path::new("/home/dev/workspace"),
+            Some(Path::new("apps\\api")),
+        );
+        assert_eq!(path, "/home/dev/workspace/apps/api");
+    }
+
+    #[test]
+    fn test_remote_workspace_uri_uses_ssh_remote_scheme() {
+        let ws = Workspace::from_remote_path(
+            Path::new("/home/dev/workspace"),
+            "remote-test".to_string(),
+        )
+        .unwrap();
+        assert_eq!(
+            ws.remote_folder_uri(Some(Path::new("packages/api"))),
+            "vscode-remote://ssh-remote+remote-test/home/dev/workspace/packages/api"
+        );
     }
 }
