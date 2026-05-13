@@ -248,10 +248,10 @@ mod tests {
         // The oldest entry should be removed, the newest should be kept
         for i in 0..40 {
             let entry = Entry {
-                workspace_name: format!("workspace_{}", i),
+                workspace_name: format!("workspace_{i}"),
                 dev_container_name: None,
                 config_name: None,
-                workspace_path: PathBuf::from(format!("/path/to/workspace_{}", i)),
+                workspace_path: PathBuf::from(format!("/path/to/workspace_{i}")),
                 config_path: None,
                 behavior: Behavior {
                     strategy: ContainerStrategy::Detect,
@@ -284,8 +284,7 @@ mod tests {
                 .unwrap();
             assert!(
                 num >= 5,
-                "Entry workspace_{} should have been removed (only keeping most recent 35)",
-                num
+                "Entry workspace_{num} should have been removed (only keeping most recent 35)"
             );
         }
     }
