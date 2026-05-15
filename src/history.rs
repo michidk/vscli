@@ -213,15 +213,79 @@ impl Tracker {
         )?;
         let file = File::create(self.path)?;
 
-        // since history is sorted, we can remove the first entries to limit the max size
-        let entries: Vec<Entry> = self
-            .history
-            .into_entries()
-            .into_iter()
-            .take(MAX_HISTORY_ENTRIES)
-            .collect();
+        // Sort entries by last_opened (most recent first), then keep only the newest MAX_HISTORY_ENTRIES
+        let mut entries: Vec<Entry> = self.history.into_entries();
+        entries.sort_by_key(|b| std::cmp::Reverse(b.last_opened));
+        entries.truncate(MAX_HISTORY_ENTRIES);
 
         serde_json::to_writer_pretty(file, &entries)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::launch::ContainerStrategy;
+    use chrono::Duration;
+
+    #[test]
+    fn test_store_keeps_most_recent_entries() {
+        use tempfile::TempDir;
+
+        // Create a temporary directory for the test
+        let temp_dir = TempDir::new().unwrap();
+        let history_path = temp_dir.path().join("history.json");
+
+        // Create more entries than MAX_HISTORY_ENTRIES
+        let now = Utc::now();
+        let mut tracker = Tracker {
+            path: history_path.clone(),
+            history: History::default(),
+        };
+
+        // Add 40 entries (more than MAX_HISTORY_ENTRIES = 35)
+        // The oldest entry should be removed, the newest should be kept
+        for i in 0..40 {
+            let entry = Entry {
+                workspace_name: format!("workspace_{i}"),
+                dev_container_name: None,
+                config_name: None,
+                workspace_path: PathBuf::from(format!("/path/to/workspace_{i}")),
+                config_path: None,
+                behavior: Behavior {
+                    strategy: ContainerStrategy::Detect,
+                    args: vec![],
+                    command: "code".to_string(),
+                },
+                last_opened: now - Duration::seconds((39 - i) * 60), // oldest first
+            };
+            tracker.history.insert(entry);
+        }
+
+        // Store the history
+        tracker.store().unwrap();
+
+        // Load it back
+        let reloaded = Tracker::load(&history_path).unwrap();
+        let entries = reloaded.history.into_entries();
+
+        // Should have exactly MAX_HISTORY_ENTRIES
+        assert_eq!(entries.len(), MAX_HISTORY_ENTRIES);
+
+        // All entries should be from the most recent ones (workspace_5 through workspace_39)
+        // The oldest 5 entries (workspace_0 through workspace_4) should be removed
+        for entry in &entries {
+            let num: usize = entry
+                .workspace_name
+                .strip_prefix("workspace_")
+                .unwrap()
+                .parse()
+                .unwrap();
+            assert!(
+                num >= 5,
+                "Entry workspace_{num} should have been removed (only keeping most recent 35)"
+            );
+        }
     }
 }
