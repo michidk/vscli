@@ -1,20 +1,6 @@
 name: Test & Lint
 
-on:
-  push:
-    paths:
-      - 'Cargo.lock'
-      - 'Cargo.toml'
-      - 'rust-toolchain.toml'
-      - '.rustfmt.toml'
-      - 'src/**'
-  pull_request:
-    paths:
-      - 'Cargo.lock'
-      - 'Cargo.toml'
-      - 'rust-toolchain.toml'
-      - '.rustfmt.toml'
-      - 'src/**'
+on: [push, pull_request]
 
 env:
   CARGO_INCREMENTAL: 0
@@ -31,6 +17,8 @@ jobs:
   test:
     name: Test Suite
     runs-on: ubuntu-24.04
+    env:
+      CODACY_API_TOKEN: ${{ secrets.CODACY_API_TOKEN }}
     steps:
       - name: Checkout sources
         uses: actions/checkout@v7
@@ -42,13 +30,22 @@ jobs:
       - name: Cache
         uses: Swatinem/rust-cache@v2
 
-      # `test` is used instead of `build` to also include the test modules in
-      # the compilation check.
-      - name: Compile
-        run: cargo test --no-run
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
 
-      - name: Test
-        run: cargo test -- --nocapture --quiet
+      - name: Test and generate coverage
+        run: >-
+          cargo llvm-cov --all-features --workspace --lcov
+          --remap-path-prefix --output-path lcov.info
+
+      - name: Upload coverage to Codacy
+        if: env.CODACY_API_TOKEN != ''
+        uses: codacy/codacy-coverage-reporter-action@v1.3.0
+        with:
+          api-token: ${{ env.CODACY_API_TOKEN }}
+          coverage-reports: lcov.info
+          language: Rust
+          force-coverage-parser: lcov
 
   lints:
     name: Lints
