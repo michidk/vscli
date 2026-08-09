@@ -35,6 +35,8 @@ jobs:
     name: Publish to Homebrew
     runs-on: ubuntu-24.04
     environment: "publish-homebrew"
+    env:
+      TAG_NAME: ${{ github.event.inputs.tag-name }}
     steps:
       - name: Checkout homebrew-tools Repository
         uses: actions/checkout@v7
@@ -46,6 +48,11 @@ jobs:
 
       - name: Update vscli.rb Formula
         run: |
+          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            printf 'Invalid tag name: %s\n' "$TAG_NAME" >&2
+            exit 1
+          fi
+
           FORMULA_PATH="homebrew-tools/Formula/vscli.rb"
           mkdir -p artifacts
 
@@ -58,13 +65,13 @@ jobs:
 
           for asset in "${artifacts[@]}"; do
             identifier="${asset%.tar.gz}"
-            wget -q -O "artifacts/${asset}" "https://github.com/michidk/vscli/releases/download/${{ github.event.inputs.tag-name }}/${asset}" || exit 1
+            wget -q -O "artifacts/${asset}" "https://github.com/michidk/vscli/releases/download/${TAG_NAME}/${asset}" || exit 1
             sha256=$(sha256sum "artifacts/${asset}" | awk '{print $1}')
             sed -i "s|sha256 \".*\" # sha:${identifier}|sha256 \"${sha256}\" # sha:${identifier}|" "$FORMULA_PATH"
           done
 
           # Extract version number by removing the leading 'v' from the tag
-          version_number="${{ github.event.inputs.tag-name }}"
+          version_number="${TAG_NAME}"
           version_number="${version_number#v}"
 
           sed -i "s/version \".*\"/version \"${version_number}\"/" "$FORMULA_PATH"
@@ -75,5 +82,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/vscli.rb
-          git commit -m "Update vscli to version ${{ github.event.inputs.tag-name }}"
+          git commit -m "Update vscli to version ${TAG_NAME}"
           git push origin main
