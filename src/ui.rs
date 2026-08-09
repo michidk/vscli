@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local};
+// allow: SIZE_OK - The generic picker keeps event transitions and render state co-located.
 use color_eyre::eyre::Result;
 use crossterm::{
     event::{
@@ -26,9 +26,14 @@ use ratatui::{
     },
 };
 use ratatui_textarea::TextArea;
-use std::{borrow::Cow, io};
+use std::io;
 
 use crate::history::{Entry, EntryId, History, Tracker};
+
+mod items;
+
+pub use items::{ConfigItem, ContainerItem};
+use items::{DevContainerItem, HistoryItem};
 
 /// Describes an item that can be rendered and filtered by the generic picker UI.
 pub trait Pickable: Clone {
@@ -58,97 +63,6 @@ pub struct PickerOpts {
     pub hide_instructions: bool,
     /// Hide additional status/info lines.
     pub hide_info: bool,
-}
-
-/// Item wrapper for the recent-workspaces picker.
-#[derive(Debug, Clone)]
-pub struct HistoryItem {
-    /// Unique history entry id.
-    pub id: EntryId,
-    /// Stored history entry.
-    pub entry: Entry,
-}
-
-impl Pickable for HistoryItem {
-    fn title() -> &'static str {
-        "Recent Workspaces"
-    }
-
-    fn headers() -> &'static [&'static str] {
-        &[
-            "Workspace",
-            "Dev Container",
-            "Config",
-            "Path",
-            "Last Opened",
-        ]
-    }
-
-    fn cells(&self) -> Vec<String> {
-        vec![
-            self.entry.workspace_name.clone(),
-            self.entry
-                .dev_container_name
-                .as_deref()
-                .unwrap_or("")
-                .to_string(),
-            self.entry.config_name.as_deref().unwrap_or("").to_string(),
-            self.entry.workspace_path.to_string_lossy().to_string(),
-            DateTime::<Local>::from(self.entry.last_opened)
-                .format("%Y-%m-%d %H:%M:%S")
-                .to_string(),
-        ]
-    }
-
-    fn search_fields(&self) -> Vec<String> {
-        vec![
-            self.entry.workspace_name.clone(),
-            self.entry.dev_container_name.clone().unwrap_or_default(),
-            self.entry.config_name.clone().unwrap_or_default(),
-            self.entry.workspace_path.to_string_lossy().to_string(),
-        ]
-    }
-
-    fn status_lines(&self) -> Vec<String> {
-        let args_count = self.entry.behavior.args.len();
-        let args_joined = self
-            .entry
-            .behavior
-            .args
-            .iter()
-            .map(|arg| arg.to_string_lossy())
-            .collect::<Vec<Cow<'_, str>>>()
-            .join(", ");
-
-        let config_path = self
-            .entry
-            .config_path
-            .as_ref()
-            .map(|path| path.to_string_lossy().into_owned())
-            .unwrap_or_default();
-
-        vec![
-            format!(
-                "Strategy: {} • Command: {} • Args ({args_count}): {args_joined}",
-                self.entry.behavior.strategy, self.entry.behavior.command,
-            ),
-            format!("Dev Container: {config_path}"),
-        ]
-    }
-
-    fn column_constraints(max_widths: &[usize]) -> Vec<Constraint> {
-        let workspace_width = max_widths.first().copied().unwrap_or(20).clamp(9, 60);
-        let devcontainer_width = max_widths.get(1).copied().unwrap_or(20).clamp(9, 60);
-        let config_width = max_widths.get(2).copied().unwrap_or(6).clamp(6, 40);
-
-        vec![
-            Constraint::Min(u16::try_from(workspace_width).unwrap_or(u16::MAX)),
-            Constraint::Min(u16::try_from(devcontainer_width).unwrap_or(u16::MAX)),
-            Constraint::Min(u16::try_from(config_width).unwrap_or(u16::MAX)),
-            Constraint::Percentage(70),
-            Constraint::Min(20),
-        ]
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -363,6 +277,26 @@ impl<T: Pickable> PickerState<'_, T> {
     fn delete(&mut self, original_index: usize) -> bool {
         self.table_data.delete_by_original_index(original_index)
     }
+
+    fn select_clicked(&mut self, row: u16, table_area: Rect) -> Option<T> {
+        if row < table_area.y + 2 || row >= table_area.y + table_area.height - 1 {
+            return None;
+        }
+
+        let clicked_index = usize::from(row - table_area.y - 2);
+        if clicked_index >= self.table_data.as_rows_full().count() {
+            return None;
+        }
+        if self.last_clicked_index == Some(clicked_index)
+            && self.table_state.selected() == Some(clicked_index)
+        {
+            return self.get_selected_row().map(|selected| selected.item);
+        }
+
+        self.table_state.select(Some(clicked_index));
+        self.last_clicked_index = Some(clicked_index);
+        None
+    }
 }
 
 /// Starts a generic picker and returns the selected item.
@@ -484,23 +418,8 @@ fn run_app<T: Pickable>(
                     app.last_clicked_index = None;
                 }
                 AppAction::TableClick(row) => {
-                    let table_area = terminal.get_frame().area();
-                    if row >= table_area.y + 2 && row < table_area.y + table_area.height - 1 {
-                        let clicked_index = usize::from(row - table_area.y - 2);
-                        let visible_rows = app.table_data.as_rows_full().count();
-
-                        if clicked_index < visible_rows {
-                            if app.last_clicked_index == Some(clicked_index)
-                                && app.table_state.selected() == Some(clicked_index)
-                            {
-                                if let Some(selected) = app.get_selected_row() {
-                                    return Ok(Some(selected.item));
-                                }
-                            } else {
-                                app.table_state.select(Some(clicked_index));
-                                app.last_clicked_index = Some(clicked_index);
-                            }
-                        }
+                    if let Some(selected) = app.select_clicked(row, terminal.get_frame().area()) {
+                        return Ok(Some(selected));
                     }
                 }
                 AppAction::SearchInput(input) => {
@@ -688,48 +607,6 @@ fn render_status_area(
     }
 }
 
-/// Picker item wrapping a Docker devcontainer.
-#[derive(Clone, Debug)]
-pub struct ContainerItem(pub crate::container::Container);
-
-impl Pickable for ContainerItem {
-    fn title() -> &'static str {
-        "Devcontainers"
-    }
-    fn headers() -> &'static [&'static str] {
-        &["Container ID", "Status", "Image", "Project Path"]
-    }
-    fn cells(&self) -> Vec<String> {
-        vec![
-            self.0.short_id.clone(),
-            self.0.status.clone(),
-            self.0.image.clone(),
-            self.0.local_folder.clone(),
-        ]
-    }
-    fn search_fields(&self) -> Vec<String> {
-        vec![
-            self.0.short_id.clone(),
-            self.0.status.clone(),
-            self.0.image.clone(),
-            self.0.local_folder.clone(),
-            self.0.config_file.clone(),
-        ]
-    }
-    fn status_lines(&self) -> Vec<String> {
-        vec![format!("Config: {}", self.0.config_file)]
-    }
-    fn column_constraints(max_widths: &[usize]) -> Vec<Constraint> {
-        let status_w = max_widths.get(1).copied().unwrap_or(6).clamp(6, 30);
-        vec![
-            Constraint::Min(13),
-            Constraint::Min(u16::try_from(status_w).unwrap_or(6)),
-            Constraint::Percentage(40),
-            Constraint::Percentage(60),
-        ]
-    }
-}
-
 /// Launches a picker for Docker devcontainers.
 pub fn pick_container(
     containers: Vec<crate::container::Container>,
@@ -741,45 +618,6 @@ pub fn pick_container(
     Ok(selected.map(|item| item.0))
 }
 
-/// Picker item wrapping a stored devcontainer config.
-#[derive(Clone, Debug)]
-pub struct ConfigItem(pub crate::config_store::ConfigEntry);
-
-impl Pickable for ConfigItem {
-    fn title() -> &'static str {
-        "Configs"
-    }
-    fn headers() -> &'static [&'static str] {
-        &["Name", "Description", "Path"]
-    }
-    fn cells(&self) -> Vec<String> {
-        vec![
-            self.0.name.clone(),
-            self.0.description.as_deref().unwrap_or("").to_string(),
-            self.0.root.display().to_string(),
-        ]
-    }
-    fn search_fields(&self) -> Vec<String> {
-        vec![
-            self.0.name.clone(),
-            self.0.description.clone().unwrap_or_default(),
-            self.0.root.to_string_lossy().to_string(),
-        ]
-    }
-    fn status_lines(&self) -> Vec<String> {
-        vec![]
-    }
-    fn column_constraints(max_widths: &[usize]) -> Vec<Constraint> {
-        let name_w = max_widths.first().copied().unwrap_or(4).clamp(4, 30);
-        let desc_w = max_widths.get(1).copied().unwrap_or(4).clamp(4, 40);
-        vec![
-            Constraint::Min(u16::try_from(name_w).unwrap_or(4)),
-            Constraint::Min(u16::try_from(desc_w).unwrap_or(4)),
-            Constraint::Percentage(70),
-        ]
-    }
-}
-
 /// Launches a picker for stored devcontainer configs.
 pub fn pick_config(
     configs: Vec<crate::config_store::ConfigEntry>,
@@ -789,41 +627,6 @@ pub fn pick_config(
     let items: Vec<ConfigItem> = configs.into_iter().map(ConfigItem).collect();
     let selected = pick(items, opts, on_delete)?;
     Ok(selected.map(|item| item.0))
-}
-
-/// Picker item for selecting among multiple devcontainer configs in a project.
-#[derive(Clone, Debug)]
-pub struct DevContainerItem(pub crate::workspace::DevContainer);
-
-impl Pickable for DevContainerItem {
-    fn title() -> &'static str {
-        "Select Dev Container"
-    }
-    fn headers() -> &'static [&'static str] {
-        &["Name", "Config Path"]
-    }
-    fn cells(&self) -> Vec<String> {
-        vec![
-            self.0.name.as_deref().unwrap_or("(unnamed)").to_string(),
-            self.0.config_path.display().to_string(),
-        ]
-    }
-    fn search_fields(&self) -> Vec<String> {
-        vec![
-            self.0.name.clone().unwrap_or_default(),
-            self.0.config_path.to_string_lossy().to_string(),
-        ]
-    }
-    fn status_lines(&self) -> Vec<String> {
-        vec![format!("Workspace: {}", self.0.workspace_path_in_container)]
-    }
-    fn column_constraints(max_widths: &[usize]) -> Vec<Constraint> {
-        let name_w = max_widths.first().copied().unwrap_or(9).clamp(9, 40);
-        vec![
-            Constraint::Min(u16::try_from(name_w).unwrap_or(9)),
-            Constraint::Percentage(80),
-        ]
-    }
 }
 
 /// Launches a picker for devcontainer selection.
