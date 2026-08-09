@@ -35,7 +35,7 @@ jobs:
 
       - name: Create release
         id: release
-        uses: mikepenz/action-gh-release@v3
+        uses: mikepenz/action-gh-release@2a00e201320fb618d8e705a736286b2e31aa48e2 # v3
         if: startsWith(github.ref, 'refs/tags/')
         with:
           name: ${{ env.VERSION }}
@@ -81,7 +81,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Install toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
         with:
           targets: ${{ matrix.target }}
 
@@ -133,7 +133,7 @@ jobs:
           fi
 
       - name: Upload archive
-        uses: shogo82148/actions-upload-release-asset@v1
+        uses: shogo82148/actions-upload-release-asset@d0cb37bb764791e72e64e643cd7056f74f1e77d7 # v1
         with:
           upload_url: ${{ needs.create-release.outputs.upload_url }}
           asset_path: ${{ env.ASSET }}

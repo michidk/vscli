@@ -2,12 +2,15 @@ name: Check PR title
 
 on: [pull_request_target]
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-24.04
     permissions:
       statuses: write
     steps:
-      - uses: aslafy-z/conventional-pr-title-action@v3
+      - uses: aslafy-z/conventional-pr-title-action@2ce59b07f86bd51b521dd088f0acfb0d7fdac55e # v3.1.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
