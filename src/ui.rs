@@ -78,6 +78,12 @@ enum AppAction {
     TableClick(u16),
 }
 
+#[derive(Debug, Clone, Copy)]
+enum SelectionDirection {
+    Next,
+    Previous,
+}
+
 #[derive(Debug, Clone)]
 struct PickerRow<T: Pickable> {
     item: T,
@@ -206,24 +212,19 @@ impl<T: Pickable> PickerState<'_, T> {
         }
     }
 
-    fn select_next(&mut self) {
+    fn select_relative(&mut self, direction: SelectionDirection) {
         let len = self.table_data.as_rows_full().count();
         if len == 0 {
             return;
         }
 
-        let i = self.table_state.selected().unwrap_or(0);
-        self.table_state.select(Some((i + 1) % len));
-    }
-
-    fn select_previous(&mut self) {
-        let len = self.table_data.as_rows_full().count();
-        if len == 0 {
-            return;
-        }
-
-        let i = self.table_state.selected().unwrap_or(len - 1);
-        self.table_state.select(Some((i + len - 1) % len));
+        let selected = match direction {
+            SelectionDirection::Next => (self.table_state.selected().unwrap_or(0) + 1) % len,
+            SelectionDirection::Previous => {
+                (self.table_state.selected().unwrap_or(len - 1) + len - 1) % len
+            }
+        };
+        self.table_state.select(Some(selected));
     }
 
     fn select_first(&mut self) {
@@ -388,11 +389,11 @@ fn run_app<T: Pickable>(
             match action {
                 AppAction::Quit => return Ok(None),
                 AppAction::SelectNext => {
-                    app.select_next();
+                    app.select_relative(SelectionDirection::Next);
                     app.last_clicked_index = None;
                 }
                 AppAction::SelectPrevious => {
-                    app.select_previous();
+                    app.select_relative(SelectionDirection::Previous);
                     app.last_clicked_index = None;
                 }
                 AppAction::SelectFirst => {
