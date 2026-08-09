@@ -1,13 +1,12 @@
 use bollard::Docker;
 use bollard::query_parameters::{InspectContainerOptionsBuilder, ListContainersOptionsBuilder};
-use color_eyre::eyre::{Result, WrapErr, bail};
-use log::{debug, info};
+use color_eyre::eyre::{Result, WrapErr};
+use log::debug;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
 
-use crate::opts::ContainerAction;
-use crate::ui;
-use crate::workspace::{self, DevContainer, Workspace};
+mod commands;
+
+pub use commands::run_command;
 
 /// A running or stopped devcontainer discovered via Docker labels.
 #[derive(Debug, Clone)]
@@ -204,98 +203,4 @@ fn format_ports(ports: &HashMap<String, Option<Vec<bollard::models::PortBinding>
     } else {
         formatted.join(", ")
     }
-}
-
-/// Runs a container subcommand.
-pub fn run_command(action: ContainerAction, editor: &str) -> Result<()> {
-    match action {
-        ContainerAction::Ui => {
-            let containers = list(false)?;
-            if containers.is_empty() {
-                println!("no running devcontainers");
-                return Ok(());
-            }
-            let mut stop_cb = |item: &ui::ContainerItem| {
-                if let Err(e) = stop(&item.0.id) {
-                    log::warn!("Failed to stop container {}: {e}", item.0.short_id);
-                }
-            };
-            let selected =
-                ui::pick_container(containers, ui::PickerOpts::default(), Some(&mut stop_cb))?;
-            if let Some(c) = selected {
-                info!("Reopening container {} ...", c.short_id);
-                let ci = info(&c.id)?;
-                let local_folder = workspace::resolve_local_path(&ci.local_folder);
-                let project_path = Path::new(&local_folder);
-                if project_path.exists() {
-                    let ws = Workspace::from_path(project_path)?;
-                    let config_file = workspace::resolve_local_path(&ci.config_file);
-                    let config_path = PathBuf::from(&config_file);
-                    if config_path.exists() {
-                        let dev_container = DevContainer::from_config(&config_path, &ws.name)?;
-                        ws.open(vec![], false, &dev_container, editor, None)?;
-                    } else {
-                        ws.open_classic(vec![], false, editor)?;
-                    }
-                } else {
-                    bail!("Project path does not exist: {}", project_path.display());
-                }
-            }
-        }
-        ContainerAction::List { all } => {
-            let containers = list(all)?;
-            if containers.is_empty() {
-                println!("no {}devcontainers", if all { "" } else { "running " });
-                return Ok(());
-            }
-
-            let id_w = 12;
-            let status_w = containers.iter().map(|c| c.status.len()).max().unwrap_or(6);
-            let image_w = containers.iter().map(|c| c.image.len()).max().unwrap_or(5);
-            println!(
-                "{:<id_w$}  {:<status_w$}  {:<image_w$}  PROJECT PATH",
-                "CONTAINER ID", "STATUS", "IMAGE"
-            );
-            for c in &containers {
-                println!(
-                    "{:<id_w$}  {:<status_w$}  {:<image_w$}  {}",
-                    c.short_id, c.status, c.image, c.local_folder
-                );
-            }
-        }
-        ContainerAction::Info { id } => {
-            let ci = info(&id)?;
-            let created = chrono::DateTime::parse_from_rfc3339(&ci.created)
-                .map(|dt| {
-                    chrono::DateTime::<chrono::Local>::from(dt)
-                        .format("%Y-%m-%d %H:%M:%S")
-                        .to_string()
-                })
-                .unwrap_or(ci.created);
-            println!("Container:    {}", ci.id);
-            println!("Name:         {}", ci.name);
-            println!("Image:        {}", ci.image);
-            println!("Status:       {}", ci.status);
-            println!("Created:      {created}");
-            println!("Project:      {}", ci.local_folder);
-            println!("Config:       {}", ci.config_file);
-            println!("Ports:        {}", ci.ports);
-            if ci.mounts.is_empty() {
-                println!("Mounts:       none");
-            } else {
-                for (i, mount) in ci.mounts.iter().enumerate() {
-                    if i == 0 {
-                        println!("Mounts:       {mount}");
-                    } else {
-                        println!("              {mount}");
-                    }
-                }
-            }
-        }
-        ContainerAction::Stop { id } => {
-            stop(&id)?;
-            info!("Stopped container {id}");
-        }
-    }
-    Ok(())
 }
