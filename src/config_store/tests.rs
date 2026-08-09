@@ -1,13 +1,27 @@
 use super::ConfigStore;
+use std::path::PathBuf;
+use tempfile::TempDir;
+
+fn copy_fixture() -> (TempDir, ConfigStore, PathBuf) {
+    let temp = tempfile::tempdir().unwrap();
+    let store = ConfigStore::new(Some(temp.path().join("store")));
+    let target_dir = temp.path().join("target");
+    std::fs::create_dir_all(&target_dir).unwrap();
+    (temp, store, target_dir)
+}
+
+fn assert_overwrite_refused(error: &color_eyre::Report) {
+    assert!(
+        error
+            .to_string()
+            .contains("Refusing to overwrite existing path")
+    );
+}
 
 #[test]
 fn copy_into_copies_config_contents_to_target_directory() {
-    let temp = tempfile::tempdir().unwrap();
-    let store_dir = temp.path().join("store");
-    let target_dir = temp.path().join("target");
-    let store = ConfigStore::new(Some(store_dir.clone()));
+    let (_temp, store, target_dir) = copy_fixture();
 
-    std::fs::create_dir_all(&target_dir).unwrap();
     let created_root = store.add("python-dev").unwrap();
     let script_path = created_root.join("scripts").join("setup.sh");
     std::fs::create_dir_all(script_path.parent().unwrap()).unwrap();
@@ -27,10 +41,7 @@ fn copy_into_copies_config_contents_to_target_directory() {
 
 #[test]
 fn copy_into_refuses_to_overwrite_existing_paths() {
-    let temp = tempfile::tempdir().unwrap();
-    let store_dir = temp.path().join("store");
-    let target_dir = temp.path().join("target");
-    let store = ConfigStore::new(Some(store_dir));
+    let (_temp, store, target_dir) = copy_fixture();
 
     std::fs::create_dir_all(target_dir.join(".devcontainer")).unwrap();
     std::fs::write(
@@ -42,21 +53,13 @@ fn copy_into_refuses_to_overwrite_existing_paths() {
 
     let error = store.copy_into("python-dev", &target_dir).unwrap_err();
 
-    assert!(
-        error
-            .to_string()
-            .contains("Refusing to overwrite existing path")
-    );
+    assert_overwrite_refused(&error);
 }
 
 #[test]
 fn copy_into_does_not_partially_write_when_nested_conflict_exists() {
-    let temp = tempfile::tempdir().unwrap();
-    let store_dir = temp.path().join("store");
-    let target_dir = temp.path().join("target");
-    let store = ConfigStore::new(Some(store_dir.clone()));
+    let (_temp, store, target_dir) = copy_fixture();
 
-    std::fs::create_dir_all(&target_dir).unwrap();
     let created_root = store.add("python-dev").unwrap();
     let scripts_dir = created_root.join("scripts");
     std::fs::create_dir_all(&scripts_dir).unwrap();
@@ -68,11 +71,7 @@ fn copy_into_does_not_partially_write_when_nested_conflict_exists() {
 
     let error = store.copy_into("python-dev", &target_dir).unwrap_err();
 
-    assert!(
-        error
-            .to_string()
-            .contains("Refusing to overwrite existing path")
-    );
+    assert_overwrite_refused(&error);
     assert!(!target_dir.join(".devcontainer").exists());
     assert!(!target_dir.join("README.md").exists());
 }

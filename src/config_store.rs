@@ -3,7 +3,10 @@ use log::{debug, trace, warn};
 use std::path::{Path, PathBuf};
 
 mod commands;
+mod copy;
 mod path;
+
+use copy::CopyPlan;
 
 pub use commands::run_command;
 pub use path::config_name_from_path;
@@ -183,22 +186,9 @@ impl ConfigStore {
             bail!("Target path is not a directory: {}", target_dir.display());
         }
 
-        for entry in std::fs::read_dir(&source_root).wrap_err_with(|| {
-            format!("Failed to read config directory: {}", source_root.display())
-        })? {
-            let entry = entry.wrap_err("Failed to read config directory entry")?;
-            let source_path = entry.path();
-            let destination_path = target_dir.join(entry.file_name());
-            Self::ensure_copy_target_available(&source_path, &destination_path)?;
-        }
-
-        for entry in std::fs::read_dir(&source_root).wrap_err_with(|| {
-            format!("Failed to read config directory: {}", source_root.display())
-        })? {
-            let entry = entry.wrap_err("Failed to read config directory entry")?;
-            let source_path = entry.path();
-            let destination_path = target_dir.join(entry.file_name());
-            Self::copy_entry(&source_path, &destination_path)?;
+        let plans = CopyPlan::children(&source_root, target_dir)?;
+        for plan in plans {
+            plan.execute()?;
         }
 
         Ok(target_dir.join(".devcontainer"))
@@ -214,67 +204,6 @@ impl ConfigStore {
         {
             bail!("Invalid config name: '{name}'");
         }
-        Ok(())
-    }
-
-    fn ensure_copy_target_available(source: &Path, destination: &Path) -> Result<()> {
-        if destination.exists() {
-            bail!(
-                "Refusing to overwrite existing path: {}",
-                destination.display()
-            );
-        }
-
-        if source.is_dir() {
-            for entry in std::fs::read_dir(source).wrap_err_with(|| {
-                format!("Failed to read source directory: {}", source.display())
-            })? {
-                let entry = entry.wrap_err("Failed to read source directory entry")?;
-                let child_source = entry.path();
-                let child_destination = destination.join(entry.file_name());
-                Self::ensure_copy_target_available(&child_source, &child_destination)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    fn copy_entry(source: &Path, destination: &Path) -> Result<()> {
-        if destination.exists() {
-            bail!(
-                "Refusing to overwrite existing path: {}",
-                destination.display()
-            );
-        }
-
-        if source.is_dir() {
-            std::fs::create_dir_all(destination).wrap_err_with(|| {
-                format!(
-                    "Failed to create destination directory: {}",
-                    destination.display()
-                )
-            })?;
-
-            for entry in std::fs::read_dir(source).wrap_err_with(|| {
-                format!("Failed to read source directory: {}", source.display())
-            })? {
-                let entry = entry.wrap_err("Failed to read source directory entry")?;
-                let child_source = entry.path();
-                let child_destination = destination.join(entry.file_name());
-                Self::copy_entry(&child_source, &child_destination)?;
-            }
-        } else if source.is_file() {
-            std::fs::copy(source, destination).wrap_err_with(|| {
-                format!(
-                    "Failed to copy file from {} to {}",
-                    source.display(),
-                    destination.display()
-                )
-            })?;
-        } else {
-            bail!("Unsupported config entry: {}", source.display());
-        }
-
         Ok(())
     }
 
