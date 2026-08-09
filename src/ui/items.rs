@@ -1,8 +1,24 @@
-use super::Pickable;
+use super::{Pickable, WrappedPickable};
 use crate::history::{Entry, EntryId};
 use chrono::{DateTime, Local};
 use ratatui::layout::Constraint;
 use std::borrow::Cow;
+
+macro_rules! impl_wrapped_pickable {
+    ($wrapper:ty, $inner:ty) => {
+        impl WrappedPickable for $wrapper {
+            type Inner = $inner;
+
+            fn from_inner(inner: Self::Inner) -> Self {
+                Self(inner)
+            }
+
+            fn into_inner(self) -> Self::Inner {
+                self.0
+            }
+        }
+    };
+}
 
 #[derive(Debug, Clone)]
 pub struct HistoryItem {
@@ -113,13 +129,9 @@ impl Pickable for ContainerItem {
     }
 
     fn search_fields(&self) -> Vec<String> {
-        vec![
-            self.0.short_id.clone(),
-            self.0.status.clone(),
-            self.0.image.clone(),
-            self.0.local_folder.clone(),
-            self.0.config_file.clone(),
-        ]
+        let mut fields = self.cells();
+        fields.push(self.0.config_file.clone());
+        fields
     }
 
     fn status_lines(&self) -> Vec<String> {
@@ -136,6 +148,8 @@ impl Pickable for ContainerItem {
         ]
     }
 }
+
+impl_wrapped_pickable!(ContainerItem, crate::container::Container);
 
 #[derive(Clone, Debug)]
 pub struct ConfigItem(pub crate::config_store::ConfigEntry);
@@ -180,6 +194,8 @@ impl Pickable for ConfigItem {
     }
 }
 
+impl_wrapped_pickable!(ConfigItem, crate::config_store::ConfigEntry);
+
 #[derive(Clone, Debug)]
 pub struct DevContainerItem(pub crate::workspace::DevContainer);
 
@@ -218,3 +234,5 @@ impl Pickable for DevContainerItem {
         ]
     }
 }
+
+impl_wrapped_pickable!(DevContainerItem, crate::workspace::DevContainer);

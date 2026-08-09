@@ -56,6 +56,14 @@ pub trait Pickable: Clone {
     fn column_constraints(max_widths: &[usize]) -> Vec<Constraint>;
 }
 
+trait WrappedPickable: Pickable {
+    type Inner;
+
+    fn from_inner(inner: Self::Inner) -> Self;
+
+    fn into_inner(self) -> Self::Inner;
+}
+
 /// Configuration options for the generic picker UI.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct PickerOpts {
@@ -614,9 +622,7 @@ pub fn pick_container(
     opts: PickerOpts,
     on_delete: Option<&mut dyn FnMut(&ContainerItem)>,
 ) -> Result<Option<crate::container::Container>> {
-    let items: Vec<ContainerItem> = containers.into_iter().map(ContainerItem).collect();
-    let selected = pick(items, opts, on_delete)?;
-    Ok(selected.map(|item| item.0))
+    pick_wrapped::<ContainerItem>(containers, opts, on_delete)
 }
 
 /// Launches a picker for stored devcontainer configs.
@@ -625,22 +631,28 @@ pub fn pick_config(
     opts: PickerOpts,
     on_delete: Option<&mut dyn FnMut(&ConfigItem)>,
 ) -> Result<Option<crate::config_store::ConfigEntry>> {
-    let items: Vec<ConfigItem> = configs.into_iter().map(ConfigItem).collect();
-    let selected = pick(items, opts, on_delete)?;
-    Ok(selected.map(|item| item.0))
+    pick_wrapped::<ConfigItem>(configs, opts, on_delete)
 }
 
 /// Launches a picker for devcontainer selection.
 pub fn pick_devcontainer(
     dev_containers: Vec<crate::workspace::DevContainer>,
 ) -> Result<Option<crate::workspace::DevContainer>> {
-    let items: Vec<DevContainerItem> = dev_containers.into_iter().map(DevContainerItem).collect();
     let opts = PickerOpts {
         hide_instructions: false,
         hide_info: false,
     };
-    let selected = pick(items, opts, None)?;
-    Ok(selected.map(|item| item.0))
+    pick_wrapped::<DevContainerItem>(dev_containers, opts, None)
+}
+
+fn pick_wrapped<T: WrappedPickable>(
+    values: Vec<T::Inner>,
+    opts: PickerOpts,
+    on_delete: Option<&mut dyn FnMut(&T)>,
+) -> Result<Option<T::Inner>> {
+    let items = values.into_iter().map(T::from_inner).collect();
+    let selected = pick(items, opts, on_delete)?;
+    Ok(selected.map(T::into_inner))
 }
 
 fn add_num_opt(o1: Option<u32>, o2: Option<u32>) -> Option<u32> {
