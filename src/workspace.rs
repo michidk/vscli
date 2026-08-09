@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use walkdir::WalkDir;
 
-use crate::uri::{DevcontainerUriJson, FileUriJson};
+mod open;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DevContainer {
@@ -172,100 +172,6 @@ impl Workspace {
             .collect::<Result<Vec<_>, _>>()
     }
 
-    /// Open vscode using the specified dev container.
-    pub fn open(
-        &self,
-        mut args: Vec<OsString>,
-        dry_run: bool,
-        dev_container: &DevContainer,
-        command: &str,
-        subfolder: Option<&Path>,
-    ) -> Result<()> {
-        if args.iter().any(|arg| arg == "--folder-uri") {
-            bail!("Specifying `--folder-uri` is not possible while using vscli.");
-        }
-
-        let mut container_folder: String = dev_container.workspace_path_in_container.clone();
-        if let Some(sub) = subfolder {
-            let sub_str = sub.to_string_lossy().replace('\\', "/");
-            if !sub_str.is_empty() && sub_str != "." {
-                if !container_folder.ends_with('/') {
-                    container_folder.push('/');
-                }
-                container_folder.push_str(&sub_str);
-            }
-        }
-
-        let mut ws_path: String = self.path.to_string_lossy().into_owned();
-        let mut dc_path: String = dev_container.config_path.to_string_lossy().into_owned();
-
-        // detect WSL (excluding Docker containers)
-        let is_wsl: bool = {
-            #[cfg(unix)]
-            {
-                // Execute `uname -a` and capture the output
-                let output = Command::new("uname")
-                    .arg("-a")
-                    .output()
-                    .expect("Failed to execute command");
-
-                // Convert the output to a UTF-8 string
-                let uname_output = String::from_utf8(output.stdout)?;
-
-                // Check if the output contains "Microsoft" or "WSL" which are indicators of WSL environment
-                // Also we want to check for the WSLENV variable, which is not available in Docker containers
-                (uname_output.contains("Microsoft") || uname_output.contains("WSL"))
-                    && std::env::var("WSLENV").is_ok()
-            }
-            #[cfg(windows)]
-            {
-                false
-            }
-        };
-
-        if is_wsl {
-            debug!("WSL detected");
-
-            ws_path = wslpath2::convert(
-                ws_path.as_str(),
-                None,
-                wslpath2::Conversion::WslToWindows,
-                true,
-            )
-            .map_err(|e| eyre!("Error while getting wslpath: {} (path: {ws_path:?})", e))?;
-            dc_path = wslpath2::convert(
-                dc_path.as_str(),
-                None,
-                wslpath2::Conversion::WslToWindows,
-                true,
-            )
-            .map_err(|e| eyre!("Error while getting wslpath: {} (path: {dc_path:?})", e))?;
-        }
-
-        #[cfg(windows)]
-        {
-            ws_path = ws_path.replace("\\\\?\\", "");
-            dc_path = dc_path.replace("\\\\?\\", "");
-        }
-
-        let folder_uri = DevcontainerUriJson {
-            host_path: ws_path,
-            config_file: FileUriJson::new(dc_path.as_str()),
-        };
-        let json = serde_json::to_string(&folder_uri)?;
-
-        trace!("Folder uri JSON: {json}");
-
-        let hex = hex::encode(json.as_bytes());
-        let uri = format!("vscode-remote://dev-container+{hex}{container_folder}");
-
-        args.push(OsString::from("--folder-uri"));
-        args.push(OsString::from(uri.as_str()));
-
-        exec_code(args, dry_run, command)
-            .wrap_err_with(|| "Error opening vscode using dev container...")
-    }
-
     /// Open vscode like with the `code` command
     pub fn open_classic(
         &self,
@@ -358,6 +264,27 @@ mod tests {
             dev_container.workspace_path_in_container,
             "/workspaces/test"
         );
+    }
+
+    #[test]
+    fn test_deserialize_devcontainer_with_comments_and_trailing_commas() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("devcontainer.json");
+        std::fs::write(
+            &path,
+            r#"{
+                // JSON comments are supported by devcontainer files.
+                "name": "Rust",
+                "features": {
+                    "ghcr.io/guiyomh/features/just:0": {},
+                },
+            }"#,
+        )
+        .unwrap();
+
+        let dev_container = DevContainer::from_config(&path, "test").unwrap();
+
+        assert_eq!(dev_container.name, Some(String::from("Rust")));
     }
 
     #[test]
