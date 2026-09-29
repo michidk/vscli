@@ -133,7 +133,7 @@ jobs:
           fi
 
       - name: Upload archive
-        uses: shogo82148/actions-upload-release-asset@aaba0f56bdbc1071f4af234d5cb16055e8a400de # v1
+        uses: shogo82148/actions-upload-release-asset@eee382aaa9c6b13fd841694e63175fac2e2a1b48 # v1
         with:
           upload_url: ${{ needs.create-release.outputs.upload_url }}
           asset_path: ${{ env.ASSET }}
