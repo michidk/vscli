@@ -19,7 +19,7 @@ defaults:
 jobs:
   test:
     name: Test Suite
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     env:
       CODACY_API_TOKEN: ${{ secrets.CODACY_API_TOKEN }}
     steps:
@@ -52,7 +52,7 @@ jobs:
 
   lints:
     name: Lints
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout sources
         uses: actions/checkout@v7
