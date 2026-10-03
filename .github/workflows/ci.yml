@@ -34,7 +34,7 @@ jobs:
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
 
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@72f835688cb6c15903b796f704b01e652a2b8835 # cargo-llvm-cov
+        uses: taiki-e/install-action@db3874b116727aa105fa89413c3552b9346f8cc9 # cargo-llvm-cov
 
       - name: Test and generate coverage
         run: >-
