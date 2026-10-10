@@ -26,6 +26,10 @@ env:
   TAG_NAME: ${{ github.ref_name }}
   REF_TYPE: ${{ github.ref_type }}
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   validate-tag:
     name: Validate selected tag
@@ -54,29 +58,38 @@ jobs:
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
 
-      - name: Verify package version
+
+      - name: Verify package version (Cargo.toml)
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.auth-only) }}
-        id: package
+        id: package0
+        env:
+          MANIFEST_PATH: Cargo.toml
         run: |
-          package_version="$(
+          package="$(
             cargo metadata --no-deps --format-version 1 |
-              jq -er '.packages[] | select(.manifest_path == (env.GITHUB_WORKSPACE + "/Cargo.toml")) | .version'
+              jq -ec '.packages[] | select(.manifest_path == (env.GITHUB_WORKSPACE + "/" + env.MANIFEST_PATH))'
           )"
+          package_version="$(jq -r '.version' <<< "$package")"
           tag_version="${TAG_NAME#v}"
 
           if [[ "$package_version" != "$tag_version" ]]; then
             printf 'Cargo package version %s does not match tag %s\n' "$package_version" "$TAG_NAME" >&2
             exit 1
           fi
-          package_name="$(cargo metadata --no-deps --format-version 1 | jq -er '.packages[] | select(.manifest_path == (env.GITHUB_WORKSPACE + "/Cargo.toml")) | .name')"
+          package_name="$(jq -r '.name' <<< "$package")"
           printf 'name=%s\nversion=%s\n' "$package_name" "$package_version" >> "$GITHUB_OUTPUT"
 
-      - name: Check whether the version is already published
+
+      - name: Cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+
+
+      - name: Check whether the version is already published (Cargo.toml)
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.auth-only) }}
-        id: registry
+        id: registry0
         env:
-          PACKAGE_NAME: ${{ steps.package.outputs.name }}
-          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+          PACKAGE_NAME: ${{ steps.package0.outputs.name }}
+          PACKAGE_VERSION: ${{ steps.package0.outputs.version }}
         run: |
           status="$(curl --silent --show-error --retry 3 --output /dev/null --write-out '%{http_code}' \
             --user-agent 'michidk-workflows' "https://crates.io/api/v1/crates/$PACKAGE_NAME/$PACKAGE_VERSION")"
@@ -86,16 +99,14 @@ jobs:
             *) printf 'Registry lookup failed with HTTP %s\n' "$status" >&2; exit 1 ;;
           esac
 
-      - name: Cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-
-      - name: Authenticate with crates.io
-        if: ${{ steps.registry.outputs.published != 'true' }}
-        id: crates-io-auth
+      - name: Authenticate with crates.io (Cargo.toml)
+        if: ${{ steps.registry0.outputs.published != 'true' }}
+        id: crates-io-auth0
         uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
 
-      - name: Upload to crates.io
-        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.auth-only) && steps.registry.outputs.published == 'false' }}
-        run: cargo publish
+      - name: Upload to crates.io (Cargo.toml)
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.auth-only) && steps.registry0.outputs.published == 'false' }}
+        run: cargo publish --locked --manifest-path "$MANIFEST_PATH"
         env:
-          CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth.outputs.token }}
+          MANIFEST_PATH: Cargo.toml
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth0.outputs.token }}

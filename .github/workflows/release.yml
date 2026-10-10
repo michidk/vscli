@@ -71,18 +71,21 @@ jobs:
 
       - name: Verify Cargo version matches tag
         run: |
-          version="$(cargo metadata --locked --no-deps --format-version 1 |
-            jq -er '.packages[] | select(.manifest_path == (env.GITHUB_WORKSPACE + "/Cargo.toml")) | .version')"
+          metadata="$(cargo metadata --locked --no-deps --format-version 1)"
+
+          version="$(jq -er --arg manifest 'Cargo.toml' \
+            '.packages[] | select(.manifest_path == (env.GITHUB_WORKSPACE + "/" + $manifest)) | .version' <<< "$metadata")"
           if [[ "$version" != "${TAG_NAME#v}" ]]; then
             printf '::error::Cargo version %s does not match tag %s.\n' "$version" "$TAG_NAME"
             exit 1
           fi
 
+
       - name: Format, lint, and test
         run: |
           cargo fmt --all -- --check
-          cargo clippy --locked --all-targets --all-features -- -D warnings
-          cargo test --locked --all-features
+          cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+          cargo test --locked --workspace --all-features
 
   build:
     name: Build (${{ matrix.target }})
