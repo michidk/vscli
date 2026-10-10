@@ -1,0 +1,113 @@
+# @orcastrate
+# template: rust-bump-version
+# params:
+#   release_token_secret: COMMITTER_TOKEN
+# @end-orcastrate
+
+name: Bump Version & Tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to release, without the v prefix
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bump-version-${{ github.repository }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  VERSION: ${{ inputs.version }}
+  DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+  RELEASE_TOKEN_SECRET: COMMITTER_TOKEN
+
+jobs:
+  bump-and-tag:
+    name: Bump version and create tag
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - name: Validate version, branch, and token
+        env:
+          RELEASE_TOKEN: ${{ secrets[env.RELEASE_TOKEN_SECRET] }}
+        run: |
+          if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo '::error::Expected a stable X.Y.Z version without a v prefix.'
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]]; then
+            echo '::error::Run this workflow on the default branch.'
+            exit 1
+          fi
+          if [[ -z "$RELEASE_TOKEN" ]]; then
+            printf '::error::Set %s to a token with Contents and Workflows write access to this repository.\n' "$RELEASE_TOKEN_SECRET"
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          token: ${{ secrets[env.RELEASE_TOKEN_SECRET] }}
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+
+      - name: Check requested version and existing tag
+        id: version
+        run: |
+          current="$(cargo metadata --locked --no-deps --format-version 1 |
+            jq -er '.packages[] | select(.manifest_path == (env.GITHUB_WORKSPACE + "/Cargo.toml")) | .version')"
+          if git show-ref --verify --quiet "refs/tags/v$VERSION"; then
+            if [[ "$current" == "$VERSION" && "$(git rev-parse "v$VERSION^{commit}")" == "$(git rev-parse HEAD)" ]]; then
+              echo 'Version and tag already exist; nothing to do.'
+              echo 'skip=true' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo '::error::The requested tag already exists at a different version or commit.'
+            exit 1
+          fi
+          if [[ "$current" != "$VERSION" && "$(printf '%s\n' "$current" "$VERSION" | sort -V | head -1)" != "$current" ]]; then
+            echo '::error::The requested version is older than the current version.'
+            exit 1
+          fi
+
+      - name: Install cargo-edit
+        if: steps.version.outputs.skip != 'true'
+        uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2
+        with:
+          tool: cargo-edit@0.13.13
+
+      - name: Update package version without upgrading dependencies
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          cargo set-version "$VERSION"
+          cargo update --workspace
+          actual="$(cargo metadata --locked --no-deps --format-version 1 |
+            jq -er '.packages[] | select(.manifest_path == (env.GITHUB_WORKSPACE + "/Cargo.toml")) | .version')"
+          if [[ "$actual" != "$VERSION" ]]; then
+            echo '::error::Cargo version does not match the requested version.'
+            exit 1
+          fi
+
+      - name: Commit and atomically push version and tag
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Cargo.toml Cargo.lock
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(release): v$VERSION"
+          fi
+          git tag "v$VERSION"
+          git push --atomic origin "HEAD:refs/heads/$DEFAULT_BRANCH" "refs/tags/v$VERSION"

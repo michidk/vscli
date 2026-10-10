@@ -1,6 +1,12 @@
+# @orcastrate
+# template: pr-title
+# @end-orcastrate
+
 name: Check PR title
 
-on: [pull_request_target]
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
 
 permissions:
   contents: read
@@ -9,8 +15,10 @@ jobs:
   lint:
     runs-on: ubuntu-26.04
     permissions:
+      pull-requests: read
       statuses: write
     steps:
-      - uses: aslafy-z/conventional-pr-title-action@a0b851005a0f82ac983a56ead5a8111c0d8e044a # v3.2.0
+      - name: Check Conventional Commit title
+        uses: aslafy-z/conventional-pr-title-action@a0b851005a0f82ac983a56ead5a8111c0d8e044a # v3.2.0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}

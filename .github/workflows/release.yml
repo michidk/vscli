@@ -1,141 +1,246 @@
+# @orcastrate
+# template: rust-release
+# params:
+#   bin_name: vscli
+#   publish_release: false
+#   release_token_secret: COMMITTER_TOKEN
+#   targets:
+#     - {os: ubuntu-26.04, target: x86_64-unknown-linux-musl, cross: true}
+#     - {os: ubuntu-26.04, target: arm-unknown-linux-gnueabihf, cross: true}
+#     - {os: macos-latest, target: x86_64-apple-darwin}
+#     - {os: macos-latest, target: aarch64-apple-darwin}
+#     - {os: windows-latest, target: i686-pc-windows-msvc}
+#     - {os: windows-latest, target: x86_64-pc-windows-msvc}
+# @end-orcastrate
 
 name: Release
 
-# References:
-# - https://github.com/BurntSushi/ripgrep/blob/master/.github/workflows/release.yml
-
 on:
   push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
+    tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: false
 
 defaults:
   run:
     shell: bash
 
 env:
-  APP_NAME: vscli
+  BIN_NAME: vscli
+  TAG_NAME: ${{ github.ref_name }}
+  PUBLISH_RELEASE: "false"
+  RELEASE_TOKEN_SECRET: COMMITTER_TOKEN
 
 jobs:
-  create-release:
-    name: Create release
+  verify:
+    name: Verify release
     runs-on: ubuntu-26.04
-    outputs:
-      upload_url: ${{ steps.release.outputs.upload_url }}
+    timeout-minutes: 20
     steps:
-      - name: Get release version
-        if: env.VERSION == ''
+      - name: Validate release tag and publishing token
+        env:
+          RELEASE_TOKEN: ${{ secrets[env.RELEASE_TOKEN_SECRET] }}
         run: |
-          # Get the version from github tag
-          echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
-          echo "Version: ${{ env.VERSION }}"
+          if [[ "$GITHUB_REF_TYPE" != "tag" || ! "$TAG_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo '::error::Select a stable vX.Y.Z release tag.'
+            exit 1
+          fi
+          if [[ "$PUBLISH_RELEASE" == "true" && -z "$RELEASE_TOKEN" ]]; then
+            printf '::error::Set %s to a token that can publish releases and trigger downstream workflows.\n' "$RELEASE_TOKEN_SECRET"
+            exit 1
+          fi
 
-      - name: Create release
-        id: release
-        uses: mikepenz/action-gh-release@7a1a2d94070db8d22681770f42cdb85a9c38d6ac # v3
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Checkout sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          name: ${{ env.VERSION }}
-          draft: true
-          generate_release_notes: true
+          persist-credentials: false
 
-  build-release:
-    name: Build release
-    needs: ['create-release']
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+
+      - name: Verify Cargo version matches tag
+        run: |
+          version="$(cargo metadata --locked --no-deps --format-version 1 |
+            jq -er '.packages[] | select(.manifest_path == (env.GITHUB_WORKSPACE + "/Cargo.toml")) | .version')"
+          if [[ "$version" != "${TAG_NAME#v}" ]]; then
+            printf '::error::Cargo version %s does not match tag %s.\n' "$version" "$TAG_NAME"
+            exit 1
+          fi
+
+      - name: Format, lint, and test
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+          cargo test --locked --all-features
+
+  build:
+    name: Build (${{ matrix.target }})
+    needs: verify
     runs-on: ${{ matrix.os }}
-    env:
-      # Build tool. For some builds this can be cross.
-      CARGO: cargo
-      # When `CARGO` is set to `cross` this will be set to `--target {{matrix.target}}`.
-      TARGET_FLAGS: ""
-      # When `CARGO` is set to `cross` this will be set to `./target/{{matrix.target}}`.
-      TARGET_DIR: ./target
-      # Get backtraces on panics.
-      RUST_BACKTRACE: 1
+    timeout-minutes: 45
     strategy:
+      fail-fast: false
       matrix:
         include:
-        - build: linux
-          os: ubuntu-latest
-          target: x86_64-unknown-linux-musl
-        - build: linux-arm
-          os: ubuntu-latest
-          target: arm-unknown-linux-gnueabihf
-        - build: macos
-          os: macos-latest
-          target: x86_64-apple-darwin
-        - build: macos-arm
-          os: macos-latest
-          target: aarch64-apple-darwin
-        - build: win32-msvc
-          os: windows-latest
-          target: i686-pc-windows-msvc
-        - build: win-msvc
-          os: windows-latest
-          target: x86_64-pc-windows-msvc
+
+          - os: ubuntu-26.04
+            target: x86_64-unknown-linux-musl
+            cross: true
+            lib_file: ""
+
+          - os: ubuntu-26.04
+            target: arm-unknown-linux-gnueabihf
+            cross: true
+            lib_file: ""
+
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            cross: false
+            lib_file: ""
+
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            cross: false
+            lib_file: ""
+
+          - os: windows-latest
+            target: i686-pc-windows-msvc
+            cross: false
+            lib_file: ""
+
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            cross: false
+            lib_file: ""
+
+    env:
+      TARGET: ${{ matrix.target }}
+      LIB_FILE: ${{ matrix.lib_file }}
+      BUILD_TOOL: cargo
+      CARGO_PROFILE_RELEASE_STRIP: debuginfo
+      CROSS_TARGET_ARM_UNKNOWN_LINUX_GNUEABIHF_IMAGE: ghcr.io/cross-rs/arm-unknown-linux-gnueabihf:0.2.5
+      CROSS_TARGET_X86_64_UNKNOWN_LINUX_MUSL_IMAGE: ghcr.io/cross-rs/x86_64-unknown-linux-musl:0.2.5
     steps:
-      - name: Checkout repository
+      - name: Checkout sources
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
         with:
           targets: ${{ matrix.target }}
 
-      - name: Setup Cross
-        if: matrix.target != ''
+      - name: Cache
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          key: release-${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.cross
+        uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2
+        with:
+          tool: cross@0.2.5
+
+      - name: Select cross compiler
+        if: matrix.cross
+        run: echo 'BUILD_TOOL=cross' >> "$GITHUB_ENV"
+
+      - name: Build release
+        run: '"$BUILD_TOOL" build --release --locked --target "$TARGET"'
+
+      - name: Package archives
         run: |
-          cargo install cross
-          echo "CARGO=cross" >> $GITHUB_ENV
-          echo "TARGET_FLAGS=--target ${{ matrix.target }}" >> $GITHUB_ENV
-          echo "TARGET_DIR=./target/${{ matrix.target }}" >> $GITHUB_ENV
-
-      - name: Show command used for Cargo
-        run: |
-          echo "cargo command is: ${{ env.CARGO }}"
-          echo "target flag is: ${{ env.TARGET_FLAGS }}"
-          echo "target dir is: ${{ env.TARGET_DIR }}"
-
-      - name: Build release binary without features
-        run: ${{ env.CARGO }} build --release --verbose ${{ env.TARGET_FLAGS }}
-
-      - name: Strip release binary (linux)
-        if: matrix.build == 'linux' || matrix.os == 'macos'
-        run: strip "${{ env.TARGET_DIR }}/release/${{ env.APP_NAME }}"
-
-      - name: Strip release binary (arm)
-        if: matrix.build == 'linux-arm'
-        run: |
-          docker run --rm -v \
-            "$PWD/target:/target:Z" \
-            rustembedded/cross:arm-unknown-linux-gnueabihf \
-            arm-linux-gnueabihf-strip \
-            /target/arm-unknown-linux-gnueabihf/release/${{ env.APP_NAME }}
-
-      - name: Build archive
-        run: |
-          staging="${{ env.APP_NAME }}-${{ matrix.target }}"
-          mkdir -p "$staging"
-
-          if [[ "${{ matrix.os }}" = "windows-latest" ]]; then
-            echo "Archiving windows build"
-            cp "${{ env.TARGET_DIR }}/release/${{ env.APP_NAME }}.exe" "$staging/"
-            7z a "$staging.zip" "$staging"
-            echo "ASSET=$staging.zip" >> $GITHUB_ENV
-          else
-            echo "Archiving unix build"
-            cp "${{ env.TARGET_DIR }}/release/${{ env.APP_NAME }}" "$staging/"
-            tar czf "$staging.tar.gz" "$staging"
-            echo "ASSET=$staging.tar.gz" >> $GITHUB_ENV
+          archive() {
+            if [[ "$RUNNER_OS" == "Windows" ]]; then
+              7z a "dist/$1.zip" "$1"
+            else
+              tar -czf "dist/$1.tar.gz" "$1"
+            fi
+          }
+          cli_dir="$BIN_NAME-$TARGET"
+          binary="$BIN_NAME"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then binary="$binary.exe"; fi
+          mkdir -p dist "$cli_dir"
+          cp "target/$TARGET/release/$binary" "$cli_dir/"
+          archive "$cli_dir"
+          if [[ -n "$LIB_FILE" ]]; then
+            lib_dir="lib$BIN_NAME-$TARGET"
+            mkdir -p "$lib_dir"
+            cp "target/$TARGET/release/$LIB_FILE" "$lib_dir/"
+            archive "$lib_dir"
           fi
 
-      - name: Upload archive
-        uses: shogo82148/actions-upload-release-asset@9ee13965a8a51926f330b424693f25fcff8f2ef6 # v1
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ env.ASSET }}
-          asset_name: ${{ env.ASSET }}
-          asset_content_type: application/octet-stream
+          name: release-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Create GitHub release
+    needs: build
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Generate release changelog
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4
+        with:
+          config: cliff.toml
+          args: --current --strip header --output CHANGELOG.md
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: release-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: artifacts
+        run: sha256sum -- * > SHA256SUMS
+
+      - name: Create or update draft, then publish if enabled
+        env:
+          # Publishing with GITHUB_TOKEN would suppress release-triggered workflows.
+          GH_TOKEN: ${{ env.PUBLISH_RELEASE == 'true' && secrets[env.RELEASE_TOKEN_SECRET] || github.token }}
+        run: |
+          release_state="$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" |
+            jq -r --arg tag "$TAG_NAME" '.[] | select(.tag_name == $tag) | .draft')"
+          if [[ "$release_state" == "false" ]]; then
+            echo 'Release is already published; leaving it unchanged.'
+            exit 0
+          fi
+          if [[ "$release_state" == "true" ]]; then
+            gh release upload "$TAG_NAME" artifacts/* --clobber
+            gh release edit "$TAG_NAME" --notes-file CHANGELOG.md
+          else
+            gh release create "$TAG_NAME" artifacts/* --verify-tag --draft \
+              --title "${TAG_NAME#v}" --notes-file CHANGELOG.md
+          fi
+          if [[ "$PUBLISH_RELEASE" == "true" ]]; then
+            gh release edit "$TAG_NAME" --draft=false
+          fi
