@@ -1,4 +1,4 @@
-name: Publish
+name: Publish Homebrew
 
 on:
   release:
@@ -23,28 +23,6 @@ jobs:
             printf 'Select a release tag when dispatching this workflow: %s\n' "$TAG_NAME" >&2
             exit 1
           fi
-
-  publish-cratesio:
-    name: Publish to crates.io
-    needs: validate-tag
-    runs-on: ubuntu-26.04
-    environment: publish-crates.io
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
-
-      - name: Cache
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
-
-      - name: Upload to crates.io
-        run: cargo publish
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   publish-homebrew:
     name: Publish to Homebrew
