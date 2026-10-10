@@ -1,4 +1,4 @@
-name: Publish
+name: Publish Homebrew
 
 on:
   release:
@@ -23,11 +23,6 @@ jobs:
             printf 'Select a release tag when dispatching this workflow: %s\n' "$TAG_NAME" >&2
             exit 1
           fi
-
-  publish-cratesio:
-    uses: michidk/workflows/.github/workflows/publish-rust-crate.yml@main
-    secrets:
-      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   publish-homebrew:
     name: Publish to Homebrew
