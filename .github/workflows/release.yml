@@ -32,7 +32,9 @@ defaults:
     shell: bash
 
 env:
+
   BIN_NAME: vscli
+
   TAG_NAME: ${{ github.ref_name }}
   PUBLISH_RELEASE: "false"
   RELEASE_TOKEN_SECRET: COMMITTER_TOKEN
@@ -74,7 +76,7 @@ jobs:
           metadata="$(cargo metadata --locked --no-deps --format-version 1)"
 
           version="$(jq -er --arg manifest 'Cargo.toml' \
-            '.packages[] | select(.manifest_path == (env.GITHUB_WORKSPACE + "/" + $manifest)) | .version' <<< "$metadata")"
+            '.packages[] | select((.manifest_path | gsub("\\\\"; "/")) == ((env.GITHUB_WORKSPACE | gsub("\\\\"; "/")) + "/" + $manifest)) | .version' <<< "$metadata")"
           if [[ "$version" != "${TAG_NAME#v}" ]]; then
             printf '::error::Cargo version %s does not match tag %s.\n' "$version" "$TAG_NAME"
             exit 1
@@ -86,6 +88,7 @@ jobs:
           cargo fmt --all -- --check
           cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
           cargo test --locked --workspace --all-features
+
 
   build:
     name: Build (${{ matrix.target }})
@@ -193,6 +196,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+
   release:
     name: Create GitHub release
     needs: build
@@ -215,6 +219,7 @@ jobs:
           config: cliff.toml
           args: --current --strip header --output CHANGELOG.md
 
+
       - name: Download build artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
@@ -225,6 +230,7 @@ jobs:
       - name: Generate checksums
         working-directory: artifacts
         run: sha256sum -- * > SHA256SUMS
+
 
       - name: Create or update draft, then publish if enabled
         env:
@@ -238,7 +244,9 @@ jobs:
             exit 0
           fi
           if [[ "$release_state" == "true" ]]; then
+
             gh release upload "$TAG_NAME" artifacts/* --clobber
+
             gh release edit "$TAG_NAME" --notes-file CHANGELOG.md
           else
             gh release create "$TAG_NAME" artifacts/* --verify-tag --draft \

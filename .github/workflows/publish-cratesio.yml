@@ -67,7 +67,7 @@ jobs:
         run: |
           package="$(
             cargo metadata --no-deps --format-version 1 |
-              jq -ec '.packages[] | select(.manifest_path == (env.GITHUB_WORKSPACE + "/" + env.MANIFEST_PATH))'
+              jq -ec '.packages[] | select((.manifest_path | gsub("\\\\"; "/")) == ((env.GITHUB_WORKSPACE | gsub("\\\\"; "/")) + "/" + env.MANIFEST_PATH))'
           )"
           package_version="$(jq -r '.version' <<< "$package")"
           tag_version="${TAG_NAME#v}"
