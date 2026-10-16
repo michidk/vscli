@@ -61,7 +61,7 @@ jobs:
           token: ${{ secrets[env.RELEASE_TOKEN_SECRET] }}
 
       - name: Install toolchain
-        uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
 
       - name: Check requested version and existing tag
         id: version
@@ -93,7 +93,7 @@ jobs:
 
       - name: Install cargo-edit
         if: steps.version.outputs.skip != 'true'
-        uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2
+        uses: taiki-e/install-action@8cca0918f8471c33515202b73f56ab27f2bed283 # v2
         with:
           tool: cargo-edit@0.13.13
 
