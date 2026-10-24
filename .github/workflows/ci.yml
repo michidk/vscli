@@ -2,6 +2,7 @@
 # template: rust-ci
 # params:
 #   coverage: true
+#   codacy: true
 # @end-orcastrate
 
 name: Test & Lint
