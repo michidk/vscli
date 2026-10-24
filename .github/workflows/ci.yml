@@ -26,10 +26,6 @@ jobs:
   test:
     name: Test Suite
     runs-on: ${{ matrix.os }}
-
-    env:
-      CODACY_API_TOKEN: ${{ secrets.CODACY_API_TOKEN }}
-
     strategy:
       matrix:
         os: ["ubuntu-26.04"]
@@ -51,6 +47,9 @@ jobs:
         run: >-
           cargo llvm-cov --all-features --workspace --lcov
           --remap-path-prefix --output-path lcov.info
+
+
+
 
 
   lints:
