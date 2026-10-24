@@ -45,7 +45,7 @@ jobs:
 
 
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@94a99045a72830168b8eae8bf767ba08abeca856 # cargo-llvm-cov
+        uses: taiki-e/install-action@c3076e6fa5aeb9a93daf1bd8eff73345250a8a9c # cargo-llvm-cov
 
       - name: Test and generate coverage
         run: >-
@@ -60,6 +60,7 @@ jobs:
           coverage-reports: lcov.info
           language: Rust
           force-coverage-parser: lcov
+        continue-on-error: true
 
 
 
