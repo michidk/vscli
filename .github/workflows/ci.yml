@@ -60,6 +60,7 @@ jobs:
           coverage-reports: lcov.info
           language: Rust
           force-coverage-parser: lcov
+        continue-on-error: true
 
 
 
