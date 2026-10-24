@@ -50,6 +50,18 @@ jobs:
           --remap-path-prefix --output-path lcov.info
 
 
+      - name: Upload coverage to Codacy
+        if: env.CODACY_API_TOKEN != ''
+        env:
+          CODACY_API_TOKEN: ${{ secrets.CODACY_API_TOKEN }}
+        uses: codacy/codacy-coverage-reporter-action@89d6c85cfafaec52c72b6c5e8b2878d33104c699 # v1.3.0
+        with:
+          api-token: ${{ env.CODACY_API_TOKEN }}
+          coverage-reports: lcov.info
+          language: Rust
+          force-coverage-parser: lcov
+        continue-on-error: true
+
 
 
 
