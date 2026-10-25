@@ -1,5 +1,5 @@
 # @orcastrate
-# template: pr-title
+# template: common/pr-title
 # @end-orcastrate
 
 name: Check PR title

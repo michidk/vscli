@@ -1,5 +1,5 @@
 # @orcastrate
-# template: rust-release
+# template: rust/release
 # params:
 #   bin_name: vscli
 #   publish_release: false

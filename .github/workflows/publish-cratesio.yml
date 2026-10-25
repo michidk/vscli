@@ -1,5 +1,5 @@
 # @orcastrate
-# template: publish-rust-crate
+# template: rust/publish-crate
 # @end-orcastrate
 
 name: Publish to crates.io

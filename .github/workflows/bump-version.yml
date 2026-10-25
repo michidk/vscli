@@ -1,5 +1,5 @@
 # @orcastrate
-# template: rust-bump-version
+# template: rust/bump-version
 # params:
 #   release_token_secret: COMMITTER_TOKEN
 # @end-orcastrate
