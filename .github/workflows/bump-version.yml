@@ -42,24 +42,27 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Validate branch and token
-        env:
-          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
         run: |
           if [[ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]]; then
             echo '::error::Run this workflow on the default branch.'
             exit 1
           fi
-          if [[ -z "$RELEASE_PAT" ]]; then
-            echo '::error::Set RELEASE_PAT to a token with Contents and Workflows write access to this repository.'
-            exit 1
-          fi
+
+      - name: Create release App token
+        id: release-token
+        uses: actions/create-github-app-token@0f859bf9e69e887678d5bbfbee594437cb440ffe # v2.1.0
+        with:
+          app-id: ${{ secrets.RELEASER_APP_ID }}
+          private-key: ${{ secrets.RELEASER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
 
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_PAT }}
+          token: ${{ steps.release-token.outputs.token }}
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
