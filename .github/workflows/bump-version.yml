@@ -34,7 +34,6 @@ defaults:
 env:
   BUMP_TYPE: ${{ inputs.bump_type }}
   DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
-  RELEASE_TOKEN_SECRET: COMMITTER_TOKEN
 
 jobs:
   bump-and-tag:
@@ -44,14 +43,14 @@ jobs:
     steps:
       - name: Validate branch and token
         env:
-          RELEASE_TOKEN: ${{ secrets[env.RELEASE_TOKEN_SECRET] }}
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
         run: |
           if [[ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]]; then
             echo '::error::Run this workflow on the default branch.'
             exit 1
           fi
-          if [[ -z "$RELEASE_TOKEN" ]]; then
-            printf '::error::Set %s to a token with Contents and Workflows write access to this repository.\n' "$RELEASE_TOKEN_SECRET"
+          if [[ -z "$RELEASE_PAT" ]]; then
+            echo '::error::Set RELEASE_PAT to a token with Contents and Workflows write access to this repository.'
             exit 1
           fi
 
@@ -60,7 +59,7 @@ jobs:
         with:
           ref: ${{ github.event.repository.default_branch }}
           fetch-depth: 0
-          token: ${{ secrets[env.RELEASE_TOKEN_SECRET] }}
+          token: ${{ secrets.RELEASE_PAT }}
 
       - name: Install toolchain
         uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
