@@ -130,7 +130,7 @@ jobs:
 
       - name: Install cargo-edit
         if: steps.version.outputs.skip != 'true'
-        uses: taiki-e/install-action@1e29709c0ec63babbe8f266397a465f29a825f91 # v2
+        uses: taiki-e/install-action@5488ac5a951645ce95062214902ac4b6bc1a1037 # v2
         with:
           tool: cargo-edit@0.13.13
 
