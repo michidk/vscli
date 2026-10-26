@@ -67,6 +67,10 @@ jobs:
 
       - name: Determine automatic version bump
         if: ${{ inputs.bump_type == 'auto' }}
+        run: test -f cliff.toml
+
+      - name: Calculate automatic version bump
+        if: ${{ inputs.bump_type == 'auto' }}
         uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4
         with:
           config: cliff.toml
