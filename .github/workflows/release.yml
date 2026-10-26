@@ -37,7 +37,6 @@ env:
 
   TAG_NAME: ${{ github.ref_name }}
   PUBLISH_RELEASE: "false"
-  RELEASE_TOKEN_SECRET: COMMITTER_TOKEN
 
 jobs:
   verify:
@@ -47,14 +46,14 @@ jobs:
     steps:
       - name: Validate release tag and publishing token
         env:
-          RELEASE_TOKEN: ${{ secrets[env.RELEASE_TOKEN_SECRET] }}
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
         run: |
           if [[ "$GITHUB_REF_TYPE" != "tag" || ! "$TAG_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
             echo '::error::Select a stable vX.Y.Z release tag.'
             exit 1
           fi
-          if [[ "$PUBLISH_RELEASE" == "true" && -z "$RELEASE_TOKEN" ]]; then
-            printf '::error::Set %s to a token that can publish releases and trigger downstream workflows.\n' "$RELEASE_TOKEN_SECRET"
+          if [[ "$PUBLISH_RELEASE" == "true" && -z "$RELEASE_PAT" ]]; then
+            echo '::error::Set RELEASE_PAT to a token that can publish releases and trigger downstream workflows.'
             exit 1
           fi
 
@@ -235,7 +234,7 @@ jobs:
       - name: Create or update draft, then publish if enabled
         env:
           # Publishing with GITHUB_TOKEN would suppress release-triggered workflows.
-          GH_TOKEN: ${{ env.PUBLISH_RELEASE == 'true' && secrets[env.RELEASE_TOKEN_SECRET] || github.token }}
+          GH_TOKEN: ${{ env.PUBLISH_RELEASE == 'true' && secrets.RELEASE_PAT || github.token }}
         run: |
           release_state="$(gh api --paginate "repos/$GH_REPO/releases?per_page=100" |
             jq -r --arg tag "$TAG_NAME" '.[] | select(.tag_name == $tag) | .draft')"
