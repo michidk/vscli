@@ -3,6 +3,9 @@
   "extends": [
     "github>michidk/workflows//templates/presets/renovate"
   ],
+  "addLabels": [
+    "no-stale"
+  ],
   "packageRules": [
     {
       "matchManagers": [
