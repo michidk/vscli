@@ -158,14 +158,57 @@ jobs:
           fi
 
 
-      - name: Commit and atomically push version and tag
+      - name: Publish signed version commit and tag
         if: steps.version.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          CO_AUTHORS: >-
+            []
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- Cargo.toml Cargo.lock ':(glob)**/Cargo.toml'
-          if ! git diff --cached --quiet; then
-            git commit -m "chore(release): v$VERSION"
-          fi
-          git tag "v$VERSION"
-          git push --atomic origin "HEAD:refs/heads/$DEFAULT_BRANCH" "refs/tags/v$VERSION"
+          python3 - <<'PYCOMMIT'
+          import base64
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+
+          def gh(*args, payload=None):
+              command = ["gh", "api", *args]
+              if payload is not None:
+                  command += ["--input", "-"]
+              return json.loads(subprocess.check_output(
+                  command, input=json.dumps(payload) if payload is not None else None,
+                  text=True))
+
+          head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          files = subprocess.check_output([
+              "git", "diff", "--name-only", "-z", "HEAD", "--",
+              "Cargo.toml", "Cargo.lock", ":(glob)**/Cargo.toml"], text=True).split("\0")
+          files = [path for path in files if path]
+          repo = os.environ["GH_REPO"]
+          tag = "v" + os.environ["VERSION"]
+          trailers = ["Co-authored-by: " + author
+                      for author in dict.fromkeys(json.loads(os.environ["CO_AUTHORS"]))]
+          if files:
+              result = gh("graphql", payload={
+                  "query": "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
+                  "variables": {"input": {
+                      "branch": {"repositoryNameWithOwner": repo,
+                                 "branchName": os.environ["DEFAULT_BRANCH"]},
+                      "expectedHeadOid": head,
+                      "message": {"headline": "chore(release): " + tag,
+                                  "body": "\n".join(trailers)},
+                      "fileChanges": {"additions": [
+                          {"path": path, "contents": base64.b64encode(Path(path).read_bytes()).decode()}
+                          for path in files]}}}})
+              head = result["data"]["createCommitOnBranch"]["commit"]["oid"]
+              commit = gh(f"repos/{repo}/commits/{head}")["commit"]
+              if not commit["verification"]["verified"]:
+                  raise SystemExit("GitHub did not verify the release commit signature")
+              if any(trailer not in commit["message"].splitlines() for trailer in trailers):
+                  raise SystemExit("The release commit is missing a co-author trailer")
+          gh(f"repos/{repo}/git/refs", payload={"ref": "refs/tags/" + tag, "sha": head})
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write(f"Created {tag} at {head}\n")
+          PYCOMMIT
