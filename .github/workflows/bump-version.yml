@@ -2,6 +2,9 @@
 # template: rust/bump-version
 # params:
 #   release_token_secret: COMMITTER_TOKEN
+#   co_authors:
+#     - Michael Lohr <michael@lohr.dev>
+#     - Codex <codex@openai.com>
 # @end-orcastrate
 
 name: Bump Version & Tag
@@ -164,7 +167,7 @@ jobs:
           GH_TOKEN: ${{ steps.release-token.outputs.token }}
           GH_REPO: ${{ github.repository }}
           CO_AUTHORS: >-
-            []
+            ["Michael Lohr <michael@lohr.dev>", "Codex <codex@openai.com>"]
         run: |
           python3 - <<'PYCOMMIT'
           import base64
