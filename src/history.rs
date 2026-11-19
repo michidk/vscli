@@ -28,9 +28,6 @@ pub struct Entry {
     pub config_name: Option<String>,
     /// The path to the vscode workspace
     pub workspace_path: PathBuf,
-    /// The remote SSH host alias, if the workspace was opened remotely.
-    #[serde(default)]
-    pub remote_host: Option<String>,
     /// The path to the dev container config, if it exists
     pub config_path: Option<PathBuf>,
     /// The launch behavior
@@ -44,7 +41,6 @@ pub struct Entry {
 impl PartialEq for Entry {
     fn eq(&self, other: &Self) -> bool {
         self.workspace_path == other.workspace_path
-            && self.remote_host == other.remote_host
             && self.config_path == other.config_path
             && self.behavior == other.behavior
     }
@@ -230,57 +226,7 @@ impl Tracker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::launch::{Behavior, ContainerStrategy};
-    use chrono::Utc;
-    use std::ffi::OsString;
-    use std::path::PathBuf;
-
-    fn unique_test_path(name: &str) -> PathBuf {
-        let unique = format!(
-            "vscli-history-{name}-{}-{}",
-            std::process::id(),
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_nanos()
-        );
-        std::env::temp_dir().join(unique).join("history.json")
-    }
-
-    #[test]
-    fn tracker_store_and_load_preserve_remote_host_entries() {
-        let path = unique_test_path("remote-host");
-        let mut tracker = Tracker {
-            path: path.clone(),
-            history: History::default(),
-        };
-
-        tracker.history.upsert(Entry {
-            workspace_name: "workspace".to_string(),
-            dev_container_name: None,
-            config_name: None,
-            workspace_path: PathBuf::from("/home/dev/workspace"),
-            remote_host: Some("vscli-remote-test".to_string()),
-            config_path: None,
-            behavior: Behavior {
-                strategy: ContainerStrategy::ForceClassic,
-                args: vec![OsString::from("--reuse-window")],
-                command: "code".to_string(),
-            },
-            last_opened: Utc::now(),
-        });
-
-        tracker.store().unwrap();
-
-        let loaded = Tracker::load(path).unwrap();
-        let entries = loaded.history.into_entries();
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].remote_host.as_deref(), Some("vscli-remote-test"));
-        assert_eq!(
-            entries[0].behavior.strategy,
-            ContainerStrategy::ForceClassic
-        );
-    }
+    use crate::launch::ContainerStrategy;
     use chrono::Duration;
 
     #[test]
@@ -306,7 +252,6 @@ mod tests {
                 dev_container_name: None,
                 config_name: None,
                 workspace_path: PathBuf::from(format!("/path/to/workspace_{i}")),
-                remote_host: None,
                 config_path: None,
                 behavior: Behavior {
                     strategy: ContainerStrategy::Detect,
