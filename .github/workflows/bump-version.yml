@@ -1,0 +1,217 @@
+# @orcastrate
+# template: rust/bump-version
+# params:
+#   release_token_secret: COMMITTER_TOKEN
+#   co_authors:
+#     - Michael Lohr <michael@lohr.dev>
+#     - Codex <codex@openai.com>
+# @end-orcastrate
+
+name: Bump Version & Tag
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: Version bump type
+        required: true
+        type: choice
+        default: auto
+        options:
+          - auto
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bump-version-${{ github.repository }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  BUMP_TYPE: ${{ inputs.bump_type }}
+  DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+
+jobs:
+  bump-and-tag:
+    name: Bump version and create tag
+    runs-on: ubuntu-26.04
+    timeout-minutes: 15
+    steps:
+      - name: Validate branch and token
+        run: |
+          if [[ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]]; then
+            echo '::error::Run this workflow on the default branch.'
+            exit 1
+          fi
+
+      - name: Create release App token
+        id: release-token
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          app-id: ${{ secrets.RELEASER_APP_ID }}
+          private-key: ${{ secrets.RELEASER_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 0
+          token: ${{ steps.release-token.outputs.token }}
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+
+      - name: Determine automatic version bump
+        if: ${{ inputs.bump_type == 'auto' }}
+        run: test -f cliff.toml
+
+      - name: Calculate automatic version bump
+        if: ${{ inputs.bump_type == 'auto' }}
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4
+        with:
+          config: cliff.toml
+          args: --bumped-version --output /tmp/git-cliff-changelog.md
+
+      - name: Calculate next version and check tag
+        id: version
+        run: |
+          metadata="$(cargo metadata --locked --no-deps --format-version 1)"
+          versions=()
+
+          versions+=("$(jq -er --arg manifest 'Cargo.toml' \
+            '.packages[] | select(.manifest_path == (env.GITHUB_WORKSPACE + "/" + $manifest)) | .version' <<< "$metadata")")
+
+          current="$(printf '%s\n' "${versions[@]}" | sort -u)"
+          if [[ "$current" == *$'\n'* || -z "$current" ]]; then
+            echo '::error::Release packages must share the same version.'
+            exit 1
+          fi
+          if [[ ! "$current" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo '::error::The current Cargo version must be a stable X.Y.Z version.'
+            exit 1
+          fi
+          if [[ "$BUMP_TYPE" == auto ]]; then
+            VERSION="$("$RUNNER_TEMP/git-cliff/bin/git-cliff" --bumped-version)"
+            VERSION="${VERSION#v}"
+          else
+            IFS=. read -r major minor patch <<< "$current"
+            case "$BUMP_TYPE" in
+              patch) ((patch += 1)) ;;
+              minor) ((minor += 1)); patch=0 ;;
+              major) ((major += 1)); minor=0; patch=0 ;;
+              *)
+                echo '::error::Expected auto, patch, minor, or major.'
+                exit 1
+                ;;
+            esac
+            VERSION="$major.$minor.$patch"
+          fi
+          if [[ ! "$VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo '::error::git-cliff did not produce a stable X.Y.Z version.'
+            exit 1
+          fi
+          if [[ "$current" != "$VERSION" && "$(printf '%s\n' "$current" "$VERSION" | sort -V | head -1)" != "$current" ]]; then
+            echo '::error::The calculated version is older than the current Cargo version.'
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          if git show-ref --verify --quiet "refs/tags/v$VERSION"; then
+            if [[ "$current" == "$VERSION" && "$(git rev-parse "v$VERSION^{commit}")" == "$(git rev-parse HEAD)" ]]; then
+              echo 'Version and tag already exist; nothing to do.'
+              echo 'skip=true' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo '::error::The next version tag already exists.'
+            exit 1
+          fi
+
+      - name: Install cargo-edit
+        if: steps.version.outputs.skip != 'true'
+        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2
+        with:
+          tool: cargo-edit@0.13.13
+
+      - name: Update package version without upgrading dependencies
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          metadata="$(cargo metadata --locked --no-deps --format-version 1)"
+          packages=()
+
+          packages+=(--package "$(jq -er --arg manifest 'Cargo.toml' \
+            '.packages[] | select(.manifest_path == (env.GITHUB_WORKSPACE + "/" + $manifest)) | .name' <<< "$metadata")")
+
+          cargo set-version "${packages[@]}" "$VERSION"
+          cargo update --workspace
+          metadata="$(cargo metadata --locked --no-deps --format-version 1)"
+
+          actual="$(jq -er --arg manifest 'Cargo.toml' \
+            '.packages[] | select(.manifest_path == (env.GITHUB_WORKSPACE + "/" + $manifest)) | .version' <<< "$metadata")"
+          if [[ "$actual" != "$VERSION" ]]; then
+            echo '::error::Cargo version does not match the requested version.'
+            exit 1
+          fi
+
+
+      - name: Publish signed version commit and tag
+        if: steps.version.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ steps.release-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          CO_AUTHORS: >-
+            ["Michael Lohr <michael@lohr.dev>", "Codex <codex@openai.com>"]
+        run: |
+          python3 - <<'PYCOMMIT'
+          import base64
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+
+          def gh(*args, payload=None):
+              command = ["gh", "api", *args]
+              if payload is not None:
+                  command += ["--input", "-"]
+              return json.loads(subprocess.check_output(
+                  command, input=json.dumps(payload) if payload is not None else None,
+                  text=True))
+
+          head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          files = subprocess.check_output([
+              "git", "diff", "--name-only", "-z", "HEAD", "--",
+              "Cargo.toml", "Cargo.lock", ":(glob)**/Cargo.toml"], text=True).split("\0")
+          files = [path for path in files if path]
+          repo = os.environ["GH_REPO"]
+          tag = "v" + os.environ["VERSION"]
+          trailers = ["Co-authored-by: " + author
+                      for author in dict.fromkeys(json.loads(os.environ["CO_AUTHORS"]))]
+          if files:
+              result = gh("graphql", payload={
+                  "query": "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
+                  "variables": {"input": {
+                      "branch": {"repositoryNameWithOwner": repo,
+                                 "branchName": os.environ["DEFAULT_BRANCH"]},
+                      "expectedHeadOid": head,
+                      "message": {"headline": "chore(release): " + tag,
+                                  "body": "\n".join(trailers)},
+                      "fileChanges": {"additions": [
+                          {"path": path, "contents": base64.b64encode(Path(path).read_bytes()).decode()}
+                          for path in files]}}}})
+              head = result["data"]["createCommitOnBranch"]["commit"]["oid"]
+              commit = gh(f"repos/{repo}/commits/{head}")["commit"]
+              if not commit["verification"]["verified"]:
+                  raise SystemExit("GitHub did not verify the release commit signature")
+              if any(trailer not in commit["message"].splitlines() for trailer in trailers):
+                  raise SystemExit("The release commit is missing a co-author trailer")
+          gh(f"repos/{repo}/git/refs", payload={"ref": "refs/tags/" + tag, "sha": head})
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as summary:
+              summary.write(f"Created {tag} at {head}\n")
+          PYCOMMIT

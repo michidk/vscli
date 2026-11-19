@@ -1,0 +1,112 @@
+# @orcastrate
+# template: rust/publish-crate
+# @end-orcastrate
+
+name: Publish to crates.io
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      auth-only:
+        description: Verify Trusted Publishing without uploading a crate
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-cratesio-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TAG_NAME: ${{ github.ref_name }}
+  REF_TYPE: ${{ github.ref_type }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  validate-tag:
+    name: Validate selected tag
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Require a release tag
+        run: |
+          if [[ "$AUTH_ONLY" != "true" && ( "$REF_TYPE" != "tag" || ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ) ]]; then
+            printf 'Select a release tag when dispatching this workflow: %s\n' "$TAG_NAME" >&2
+            exit 1
+          fi
+        env:
+          AUTH_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.auth-only }}
+
+  publish-cratesio:
+    name: Publish to crates.io
+    needs: validate-tag
+    runs-on: ubuntu-26.04
+    environment: publish-crates.io
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Install toolchain
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+
+
+      - name: Verify package version (Cargo.toml)
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.auth-only) }}
+        id: package0
+        env:
+          MANIFEST_PATH: Cargo.toml
+        run: |
+          package="$(
+            cargo metadata --no-deps --format-version 1 |
+              jq -ec '.packages[] | select((.manifest_path | gsub("\\\\"; "/")) == ((env.GITHUB_WORKSPACE | gsub("\\\\"; "/")) + "/" + env.MANIFEST_PATH))'
+          )"
+          package_version="$(jq -r '.version' <<< "$package")"
+          tag_version="${TAG_NAME#v}"
+
+          if [[ "$package_version" != "$tag_version" ]]; then
+            printf 'Cargo package version %s does not match tag %s\n' "$package_version" "$TAG_NAME" >&2
+            exit 1
+          fi
+          package_name="$(jq -r '.name' <<< "$package")"
+          printf 'name=%s\nversion=%s\n' "$package_name" "$package_version" >> "$GITHUB_OUTPUT"
+
+
+      - name: Cache
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+
+
+      - name: Check whether the version is already published (Cargo.toml)
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.auth-only) }}
+        id: registry0
+        env:
+          PACKAGE_NAME: ${{ steps.package0.outputs.name }}
+          PACKAGE_VERSION: ${{ steps.package0.outputs.version }}
+        run: |
+          status="$(curl --silent --show-error --retry 3 --output /dev/null --write-out '%{http_code}' \
+            --user-agent 'michidk-workflows' "https://crates.io/api/v1/crates/$PACKAGE_NAME/$PACKAGE_VERSION")"
+          case "$status" in
+            200) echo 'published=true' >> "$GITHUB_OUTPUT" ;;
+            404) echo 'published=false' >> "$GITHUB_OUTPUT" ;;
+            *) printf 'Registry lookup failed with HTTP %s\n' "$status" >&2; exit 1 ;;
+          esac
+
+      - name: Authenticate with crates.io (Cargo.toml)
+        if: ${{ steps.registry0.outputs.published != 'true' }}
+        id: crates-io-auth0
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
+
+      - name: Upload to crates.io (Cargo.toml)
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.auth-only) && steps.registry0.outputs.published == 'false' }}
+        run: cargo publish --locked --manifest-path "$MANIFEST_PATH"
+        env:
+          MANIFEST_PATH: Cargo.toml
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-io-auth0.outputs.token }}

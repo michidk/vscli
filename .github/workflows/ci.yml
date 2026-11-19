@@ -1,26 +1,22 @@
+# @orcastrate
+# template: rust/ci
+# params:
+#   coverage: true
+#   codacy: true
+# @end-orcastrate
+
 name: Test & Lint
 
-on:
-  push:
-    paths:
-      - 'Cargo.lock'
-      - 'Cargo.toml'
-      - 'rust-toolchain.toml'
-      - '.rustfmt.toml'
-      - 'src/**'
-  pull_request:
-    paths:
-      - 'Cargo.lock'
-      - 'Cargo.toml'
-      - 'rust-toolchain.toml'
-      - '.rustfmt.toml'
-      - 'src/**'
+on: [push, pull_request]
+
+permissions:
+  contents: read
 
 env:
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
   RUST_BACKTRACE: short
-  RUSTFLAGS: "-D warnings -W rust-2021-compatibility"
+  RUSTFLAGS: "-D warnings"
   RUSTUP_MAX_RETRIES: 10
 
 defaults:
@@ -30,41 +26,59 @@ defaults:
 jobs:
   test:
     name: Test Suite
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ["ubuntu-26.04"]
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
 
-      # This plugin should be loaded after toolchain setup
       - name: Cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
 
-      # `test` is used instead of `build` to also include the test modules in
-      # the compilation check.
-      - name: Compile
-        run: cargo test --no-run
 
-      - name: Test
-        run: cargo test -- --nocapture --quiet
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@5b56535d0239d0a46e7d74f64d83712fad4564d3 # cargo-llvm-cov
+
+      - name: Test and generate coverage
+        run: >-
+          cargo llvm-cov --all-features --workspace --lcov
+          --remap-path-prefix --output-path lcov.info
+
+
+      - name: Upload coverage to Codacy
+        if: env.CODACY_API_TOKEN != ''
+        env:
+          CODACY_API_TOKEN: ${{ secrets.CODACY_API_TOKEN }}
+        uses: codacy/codacy-coverage-reporter-action@89d6c85cfafaec52c72b6c5e8b2878d33104c699 # v1.3.0
+        with:
+          api-token: ${{ env.CODACY_API_TOKEN }}
+          coverage-reports: lcov.info
+          language: Rust
+          force-coverage-parser: lcov
+        continue-on-error: true
+
+
+
 
   lints:
     name: Lints
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
         with:
           components: rustfmt, clippy
 
-      # This plugin should be loaded after toolchain setup
       - name: Cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
 
       - name: Run cargo fmt
         run: cargo fmt --all -- --check --color always

@@ -50,7 +50,6 @@ for _ in $(seq 1 30); do
 done
 
 ssh -F "$SSH_CONFIG" vscli-remote-test 'test -f /home/dev/workspace/.devcontainer/devcontainer.json'
-VSCLI_EDITOR_LOG="$EDITOR_LOG" cargo run -- open --remote-host vscli-remote-test /home/dev/workspace --command "$FAKE_EDITOR"
+VSCLI_EDITOR_LOG="$EDITOR_LOG" cargo run -- --history-path "$TMP_DIR/history.json" --config-dir "$TMP_DIR/configs" open --remote-host vscli-remote-test /home/dev/workspace --command "$FAKE_EDITOR"
 
-grep -Fx -- '--folder-uri' "$EDITOR_LOG"
-grep -Fx -- 'vscode-remote://ssh-remote+vscli-remote-test/home/dev/workspace' "$EDITOR_LOG"
+printf '%s\n' '--folder-uri' 'vscode-remote://ssh-remote+vscli-remote-test/home/dev/workspace' | cmp -s - "$EDITOR_LOG"
