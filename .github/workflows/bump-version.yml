@@ -50,7 +50,7 @@ jobs:
 
       - name: Create release App token
         id: release-token
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
           app-id: ${{ secrets.RELEASER_APP_ID }}
           private-key: ${{ secrets.RELEASER_APP_PRIVATE_KEY }}
@@ -65,7 +65,7 @@ jobs:
           token: ${{ steps.release-token.outputs.token }}
 
       - name: Install toolchain
-        uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
 
       - name: Determine automatic version bump
         if: ${{ inputs.bump_type == 'auto' }}
@@ -133,7 +133,7 @@ jobs:
 
       - name: Install cargo-edit
         if: steps.version.outputs.skip != 'true'
-        uses: taiki-e/install-action@4a76afe23f9e08d2d9550fb56e556444e8611d21 # v2
+        uses: taiki-e/install-action@75a7c0f87bd666af3cdb75c5b9e9d03ab6044e6f # v2
         with:
           tool: cargo-edit@0.13.13
 
