@@ -19,12 +19,17 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable release tag; omit when running on a tag
+        type: string
+        required: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.repository }}-${{ github.ref }}
+  group: release-${{ github.repository }}-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 defaults:
@@ -35,7 +40,7 @@ env:
 
   BIN_NAME: vscli
 
-  TAG_NAME: ${{ github.ref_name }}
+  TAG_NAME: ${{ inputs.tag || github.ref_name }}
   PUBLISH_RELEASE: "false"
 
 jobs:
@@ -46,7 +51,7 @@ jobs:
     steps:
       - name: Validate release tag and publishing token
         run: |
-          if [[ "$GITHUB_REF_TYPE" != "tag" || ! "$TAG_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+          if [[ ! "$TAG_NAME" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
             echo '::error::Select a stable vX.Y.Z release tag.'
             exit 1
           fi
@@ -54,6 +59,7 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: refs/tags/${{ env.TAG_NAME }}
           persist-credentials: false
 
       - name: Install toolchain
@@ -76,11 +82,13 @@ jobs:
           fi
 
 
+
       - name: Format, lint, and test
         run: |
           cargo fmt --all -- --check
           cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
           cargo test --locked --workspace --all-features
+
 
 
   build:
@@ -134,6 +142,7 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: refs/tags/${{ env.TAG_NAME }}
           persist-credentials: false
 
       - name: Install toolchain
@@ -213,6 +222,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          ref: refs/tags/${{ env.TAG_NAME }}
           persist-credentials: false
 
       - name: Generate release changelog
@@ -256,4 +266,21 @@ jobs:
           fi
           if [[ "$PUBLISH_RELEASE" == "true" ]]; then
             gh release edit "$TAG_NAME" --draft=false
+          fi
+
+  completion:
+    name: Release complete
+    if: always()
+    needs: [verify, build, release]
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    env:
+      RESULTS: ${{ toJSON(needs) }}
+    steps:
+      - name: Require every release job to succeed
+        run: |
+          printf '%s\n' "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"' | tee -a "$GITHUB_STEP_SUMMARY"
+          if ! jq -e 'all(.[]; .result == "success")' <<< "$RESULTS" > /dev/null; then
+            echo '::error::Release incomplete. Verification, builds and publication must succeed.'
+            exit 1
           fi
