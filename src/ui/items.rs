@@ -80,8 +80,7 @@ impl Pickable for HistoryItem {
             .entry
             .config_path
             .as_ref()
-            .map(|path| path.to_string_lossy().into_owned())
-            .unwrap_or_default();
+            .map_or_else(String::new, |path| path.to_string_lossy().into_owned());
 
         vec![
             format!(
