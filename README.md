@@ -4,7 +4,9 @@
 
 A CLI/TUI which makes it easy to launch [Visual Studio Code](https://code.visualstudio.com/) (vscode) [dev containers](https://containers.dev/). Also supports other editors like [Cursor](https://www.cursor.com/).
 
-![Screenshot showing the recent UI feature.](.github/images/recent.png)
+<p align="center"><a href="#installation">Install</a> · <a href="#usage">Usage</a> · <a href="https://github.com/michidk/vscli/releases">Releases</a></p>
+
+<p align="center"><img src=".github/images/recent.png" width="800" alt="Interactive list of recent workspaces"></p>
 
 Read [here](https://blog.lohr.dev/launching-dev-containers) about the journey of reverse engineering Microsoft's dev container CLI in order to make this.
 
@@ -66,6 +68,15 @@ alias vsr="vscli recent"
 ```
 
 ## Usage
+
+Open a project, or choose one from your recent workspaces:
+
+```sh
+vscli open /path/to/project
+vscli recent
+```
+
+`open` detects the project's dev container configuration. `recent` opens an interactive workspace picker.
 
 ### Commands
 
