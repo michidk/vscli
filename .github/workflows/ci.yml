@@ -42,7 +42,7 @@ jobs:
 
 
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@5b56535d0239d0a46e7d74f64d83712fad4564d3 # cargo-llvm-cov
+        uses: taiki-e/install-action@a138c079db095d22c78af31fc3e0890136adf687 # cargo-llvm-cov
 
       - name: Test and generate coverage
         run: >-
